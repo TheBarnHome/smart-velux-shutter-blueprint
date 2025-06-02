@@ -63,7 +63,7 @@ action:
       thermostat: !input thermostat
       temp_rising_entity: !input indoor_temp_rising
       weather: !input weather
-      now: "{{ now() }}"
+      #now: "{{ now() }}"
       night_start: !input night_start
       night_end: !input night_end
       night_start_dt: >
