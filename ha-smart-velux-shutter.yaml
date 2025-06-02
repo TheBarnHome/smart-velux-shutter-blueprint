@@ -4,6 +4,7 @@ blueprint:
     Gère automatiquement l'ouverture/fermeture d'une fenêtre Velux et de son volet
     en fonction de la température intérieure/extérieure, du thermostat, de l'heure et des conditions météo.
     Ferme automatiquement le volet la nuit ou lors de fortes chaleurs, en s'assurant que la fenêtre est bien fermée.
+    Ouvre automatiquement la fenêtre le matin si les conditions sont réunies.
     Envoie une notification en cas de changement d'état de la fenêtre ou du volet.
   domain: automation
   input:
@@ -31,6 +32,10 @@ blueprint:
       name: Heure de fermeture du volet (soir)
       selector:
         time:
+    sunrise_time:
+      name: Heure d'ouverture automatique du matin
+      selector:
+        time:
     notify_device:
       name: Appareil à notifier
       selector:
@@ -42,6 +47,8 @@ mode: single
 trigger:
   - platform: time_pattern
     minutes: "/5"  # Vérifie toutes les 5 minutes
+  - platform: time
+    at: !input sunrise_time
 
 variables:
   temp_ext: "{{ state_attr(blueprint.input.weather, 'temperature') | float(0) }}"
@@ -110,3 +117,17 @@ action:
               - service: notify.mobile_app_{{ device_attr(blueprint.input.notify_device, 'name') | lower | replace(" ", "_") }}
                 data:
                   message: "Fermeture du volet automatique dans {{ room_name }}."
+
+      - conditions:
+          - condition: trigger
+            id: sunrise_trigger
+          - condition: template
+            value_template: >
+              {{ temp_int > temp_target and temp_ext < temp_int }}
+        sequence:
+          - service: cover.open_cover
+            target:
+              entity_id: !input velux
+          - service: notify.mobile_app_{{ device_attr(blueprint.input.notify_device, 'name') | lower | replace(" ", "_") }}
+            data:
+              message: "Ouverture automatique du matin de la fenêtre Velux dans {{ room_name }}."
