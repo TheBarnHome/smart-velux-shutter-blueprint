@@ -78,32 +78,33 @@ variables:
 
 action:
   - choose:
-      # Cas 1 : nuit ou forte chaleur => fermer volet (et sécuriser fenêtre si ouverte)
+      # Cas 1a : nuit ou forte chaleur et fenêtre ouverte => fermer fenêtre puis volet puis rouvrir fenêtre
       - conditions:
           - condition: template
             value_template: >
-              {{ is_night or (temp_ext > temp_target and temp_int > temp_target) }}
+              {{ (is_night or (temp_ext > temp_target and temp_int > temp_target)) and velux_open }}
         sequence:
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: "{{ velux_open }}"
-                sequence:
-                  - service: cover.close_cover
-                    target:
-                      entity_id: !input velux
-                  - delay: "00:00:10"
-                  - service: cover.close_cover
-                    target:
-                      entity_id: !input volet
-                  - delay: "00:00:30"
-                  - service: cover.open_cover
-                    target:
-                      entity_id: !input velux
-              default:
-                - service: cover.close_cover
-                  target:
-                    entity_id: !input volet
+          - service: cover.close_cover
+            target:
+              entity_id: !input velux
+          - delay: "00:00:10"
+          - service: cover.close_cover
+            target:
+              entity_id: !input volet
+          - delay: "00:00:30"
+          - service: cover.open_cover
+            target:
+              entity_id: !input velux
+
+      # Cas 1b : nuit ou forte chaleur et fenêtre fermée => fermer volet
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ (is_night or (temp_ext > temp_target and temp_int > temp_target)) and not velux_open }}
+        sequence:
+          - service: cover.close_cover
+            target:
+              entity_id: !input volet
 
       # Cas 2 : température > consigne, température monte, fenêtre ouverte => fermer fenêtre puis volet
       - conditions:
