@@ -63,15 +63,7 @@ action:
       thermostat: !input thermostat
       temp_rising_entity: !input indoor_temp_rising
       weather: !input weather
-      now: now()
-      night_start: !input night_start
       night_end: !input night_end
-      night_start_dt: >
-        {% set t = night_start.split(':') %}
-        {{ now().replace(hour=t[0]|int, minute=t[1]|int, second=0, microsecond=0) }}
-      night_end_dt: >
-        {% set t = night_end.split(':') %}
-        {{ now().replace(hour=t[0]|int, minute=t[1]|int, second=0, microsecond=0) }}
       is_night: >
         {% set t1 = night_start.split(':') %}
         {% set t2 = night_end.split(':') %}
