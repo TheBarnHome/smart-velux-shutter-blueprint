@@ -1,7 +1,8 @@
 blueprint:
   name: Gestion Velux et Volet Automatique
   description: >
-    Ouvre/Ferme automatiquement une fenêtre de toit Velux et son volet en fonction de la température intérieure, extérieure, de la consigne du thermostat, de la tendance, et de l'heure (jour/nuit).
+    Ouvre/Ferme automatiquement une fenêtre de toit Velux et son volet en fonction de la température intérieure, extérieure,
+    de la consigne du thermostat, de la tendance de température, et de l'heure (jour/nuit).
   domain: automation
   input:
     velux_window:
@@ -41,7 +42,7 @@ blueprint:
 mode: single
 trigger:
   - platform: time_pattern
-    minutes: "/5"  # Toutes les 5 minutes
+    minutes: "/5"
   - platform: state
     entity_id: !input velux_window
   - platform: state
@@ -65,13 +66,17 @@ action:
       now: "{{ now() }}"
       night_start: !input night_start
       night_end: !input night_end
-      is_night: >-
-        {% set start = now.replace(hour=night_start.split(':')[0]|int, minute=night_start.split(':')[1]|int) %}
-        {% set end = now.replace(hour=night_end.split(':')[0]|int, minute=night_end.split(':')[1]|int) %}
-        {% if start > end %}
-          {{ now >= start or now < end }}
+      night_start_dt: >
+        {% set t = night_start.split(':') %}
+        {{ now().replace(hour=t[0]|int, minute=t[1]|int, second=0, microsecond=0) }}
+      night_end_dt: >
+        {% set t = night_end.split(':') %}
+        {{ now().replace(hour=t[0]|int, minute=t[1]|int, second=0, microsecond=0) }}
+      is_night: >
+        {% if night_start_dt > night_end_dt %}
+          {{ now >= night_start_dt or now < night_end_dt }}
         {% else %}
-          {{ now >= start and now < end }}
+          {{ now >= night_start_dt and now < night_end_dt }}
         {% endif %}
       current_temp: "{{ state_attr(thermostat, 'current_temperature') | float }}"
       target_temp: "{{ state_attr(thermostat, 'temperature') | float }}"
