@@ -128,26 +128,17 @@ action:
             value_template: >
               {{ is_night or (temp_ext > temp_target and temp_int > temp_target) }}
         sequence:
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: "{{ velux_open }}"
-                sequence:
-                  - service: cover.close_cover
-                    target:
-                      entity_id: !input velux
-                  - delay: "00:00:10"
-                  - service: cover.close_cover
-                    target:
-                      entity_id: !input volet
-                  - delay: "00:00:30"
-                  - service: cover.open_cover
-                    target:
-                      entity_id: !input velux
-                default:
-                  - service: cover.close_cover
-                    target:
-                      entity_id: !input volet
+          - service: cover.close_cover
+            target:
+              entity_id: !input velux
+          - delay: "00:00:10"
+          - service: cover.close_cover
+            target:
+              entity_id: !input volet
+          - delay: "00:00:30"
+          - service: cover.open_cover
+            target:
+              entity_id: !input velux
 
       # Cas 5 : ouverture automatique matin si conditions réunies
       - conditions:
