@@ -63,6 +63,7 @@ action:
       thermostat: !input thermostat
       temp_rising_entity: !input indoor_temp_rising
       weather: !input weather
+      night_start: !input night_start
       night_end: !input night_end
       is_night: >
         {% set t1 = night_start.split(':') %}
