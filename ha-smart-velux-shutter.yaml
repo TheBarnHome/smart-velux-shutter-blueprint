@@ -35,6 +35,18 @@ blueprint:
       name: Heure d'ouverture automatique du matin
       selector:
         time:
+    temp_rising:
+      name: Indicateur de tendance température monte (booléen)
+      description: "Entité binaire ou sensor indiquant si la température intérieure monte"
+      selector:
+        entity:
+          domain: binary_sensor
+    temp_falling:
+      name: Indicateur de tendance température descend (booléen)
+      description: "Entité binaire ou sensor indiquant si la température intérieure descend"
+      selector:
+        entity:
+          domain: binary_sensor
 
 mode: single
 
@@ -51,17 +63,36 @@ variables:
   velux_entity: !input velux
   volet_entity: !input volet
 
+  temp_rising_entity: !input temp_rising
+  temp_falling_entity: !input temp_falling
+
   temp_ext: "{{ state_attr(weather_entity, 'temperature') | float(0) }}"
   temp_target: "{{ state_attr(thermostat_entity, 'temperature') | float(22) }}"
   temp_int: "{{ state_attr(thermostat_entity, 'current_temperature') | float(22) }}"
   is_night: "{{ now().strftime('%H:%M:%S') > (states('input_datetime.sunset_time') or '21:00:00') }}"
   velux_state: "{{ states(velux_entity) }}"
   velux_open: "{{ velux_state in ['opening', 'open'] }}"
-  temp_diff: "{{ temp_int - temp_ext }}"
+  temp_rising: "{{ states(temp_rising_entity) == 'on' }}"
+  temp_falling: "{{ states(temp_falling_entity) == 'on' }}"
   room_name: "{{ area_name(velux_entity) or 'pièce inconnue' }}"
 
 action:
   - choose:
+      # Cas 1 : température > consigne, température monte, fenêtre ouverte => fermer fenêtre puis volet
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ temp_int > temp_target and temp_rising and velux_open }}
+        sequence:
+          - service: cover.close_cover
+            target:
+              entity_id: !input velux
+          - delay: "00:00:10"
+          - service: cover.close_cover
+            target:
+              entity_id: !input volet
+
+      # Cas 2 : température > consigne, température extérieure plus basse, pas nuit => ouvrir fenêtre
       - conditions:
           - condition: template
             value_template: >
@@ -71,6 +102,7 @@ action:
             target:
               entity_id: !input velux
 
+      # Cas 3 : température <= consigne et fenêtre ouverte => fermer fenêtre
       - conditions:
           - condition: template
             value_template: >
@@ -80,6 +112,7 @@ action:
             target:
               entity_id: !input velux
 
+      # Cas 4 : nuit ou forte chaleur => fermer volet (et sécuriser fenêtre si ouverte)
       - conditions:
           - condition: template
             value_template: >
@@ -101,11 +134,12 @@ action:
                   - service: cover.open_cover
                     target:
                       entity_id: !input velux
-            default:
-              - service: cover.close_cover
-                target:
-                  entity_id: !input volet
+              default:
+                - service: cover.close_cover
+                  target:
+                    entity_id: !input volet
 
+      # Cas 5 : ouverture automatique matin si conditions réunies
       - conditions:
           - condition: trigger
             id: sunrise_trigger
