@@ -1,147 +1,149 @@
 blueprint:
-  name: Contrôle intelligent Velux et Volet
+  name: "Gestion intelligente Velux et Volet"
   description: >
-    Ouvre/ferme la fenêtre Velux et/ou le volet selon les températures intérieure/extérieure et l'heure du jour/nuit.
-    Inclut une logique de moteur d'état pour ne pas répéter inutilement les actions.
+    Gère automatiquement l'ouverture/fermeture d'une fenêtre Velux et de son volet
+    en fonction de la température intérieure/extérieure, du thermostat, de l'heure et des conditions météo.
+    Ferme automatiquement le volet la nuit ou lors de fortes chaleurs, en s'assurant que la fenêtre est bien fermée.
+    Ouvre automatiquement la fenêtre le matin si les conditions sont réunies.
   domain: automation
   input:
-    window:
-      name: Fenêtre Velux
-      selector:
-        entity:
-          domain: cover
-    blind:
-      name: Volet
-      selector:
-        entity:
-          domain: cover
     thermostat:
-      name: Thermostat (capteur de température intérieure)
+      name: Thermostat de la pièce
       selector:
         entity:
-          domain: sensor
-          device_class: temperature
+          domain: climate
     weather:
-      name: Capteur de température extérieure
+      name: Entité météo (Météo-France)
       selector:
         entity:
-          domain: sensor
-          device_class: temperature
-    temp_rising_entity:
-      name: Entité indiquant si la température monte (booléen)
+          domain: weather
+    velux:
+      name: Entité de la fenêtre Velux
       selector:
         entity:
-          domain: input_boolean
-    night_start:
-      name: Heure début nuit (format HH:MM)
+          domain: cover
+    volet:
+      name: Entité du volet roulant
       selector:
-        text:
-          type: text
-    night_end:
-      name: Heure fin nuit (format HH:MM)
+        entity:
+          domain: cover
+    sunset_time:
+      name: Heure de fermeture du volet (soir)
       selector:
-        text:
-          type: text
-
+        time:
+    sunrise_time:
+      name: Heure d'ouverture automatique du matin
+      selector:
+        time:
+  
 mode: single
 
 trigger:
   - platform: time_pattern
     minutes: "/5"
-  - platform: state
-    entity_id: !input thermostat
-  - platform: state
-    entity_id: !input weather
-  - platform: state
-    entity_id: !input temp_rising_entity
+  - platform: time
+    at: !input sunrise_time
+    id: sunrise_trigger
 
 variables:
-  window: !input window
-  blind: !input blind
-  thermostat: !input thermostat
-  weather: !input weather
-  temp_rising_entity: !input temp_rising_entity
-  now: "{{ now() }}"
-  night_start: !input night_start
-  night_end: !input night_end
+  weather_entity: !input weather
+  thermostat_entity: !input thermostat
+  velux_entity: !input velux
+  volet_entity: !input volet
+  sunset_time: !input sunset_time
+  sunrise_time: !input sunrise_time
 
-  night_start_dt: >
-    {% set ns = night_start.split(':') %}
-    {{ today_at(ns[0]|int ~ ':' ~ ns[1]|int) }}
-  night_end_dt: >
-    {% set ne = night_end.split(':') %}
-    {{ today_at(ne[0]|int ~ ':' ~ ne[1]|int) }}
-
-  is_night: >
-    {% if night_start_dt > night_end_dt %}
-      {{ now >= night_start_dt or now < night_end_dt }}
+  temp_ext: "{{ state_attr(weather_entity, 'temperature') | float(0) }}"
+  temp_target: "{{ state_attr(thermostat_entity, 'temperature') | float(22) }}"
+  temp_int: "{{ state_attr(thermostat_entity, 'current_temperature') | float(22) }}"
+  now_ts: "{{ as_timestamp(now()) }}"
+  night_start_ts: "{{ as_timestamp(now().replace(hour=22, minute=0, second=0)) }}"
+  night_end_ts: >
+    {% if now().hour < 7 %}
+      {{ as_timestamp(now().replace(hour=7, minute=0, second=0)) }}
     {% else %}
-      {{ now >= night_start_dt and now < night_end_dt }}
+      {{ as_timestamp((now() + timedelta(days=1)).replace(hour=7, minute=0, second=0)) }}
+    {% endif %}
+  is_night: >
+    {% if night_start_ts > night_end_ts %}
+      {{ now_ts >= night_start_ts or now_ts < night_end_ts }}
+    {% else %}
+      {{ now_ts >= night_start_ts and now_ts < night_end_ts }}
+    {% endif %}
+  velux_state: "{{ states(velux_entity) }}"
+  velux_open: "{{ velux_state in ['opening', 'open'] }}"
+
+  actions: >
+    {% set acts = [] %}
+    {# Cas température monte : on ouvre la fenêtre #}
+    {% if temp_int > temp_target and temp_ext < temp_int %}
+      {% set _ = acts.append('open_velux') %}
+    {# Cas température descend : on ferme volet et fenêtre #}
+    {% elif temp_int <= temp_target %}
+      {% set _ = acts.append('close_velux') %}
+      {% set _ = acts.append('close_volet') %}
+    {# Sinon, température haute et extérieure plus élevée, on ferme volet #}
+    {% else %}
+      {% set _ = acts.append('close_volet') %}
     {% endif %}
 
-  current_temp: "{{ states(thermostat) | float(0) }}"
-  target_temp: "{{ state_attr(thermostat, 'temperature') | float(21) }}"
-  outdoor_temp: "{{ states(weather) | float(0) }}"
-  temp_rising: "{{ is_state(temp_rising_entity, 'on') }}"
-
-  window_state: "{{ states(window) }}"
-  blind_state: "{{ states(blind) }}"
-
-  should_close_blind: "{{ is_night }}"
-  should_open_blind: "{{ not is_night }}"
-  should_open_window: "{{ current_temp > target_temp and outdoor_temp < current_temp and not is_night }}"
-  should_close_window: "{{ temp_rising and current_temp > outdoor_temp }}"
+    {# La nuit, volet doit impérativement rester fermé #}
+    {% if is_night %}
+      {% set _ = acts.append('close_volet') %}
+    {% endif %}
+    {{ acts }}
 
 action:
   - choose:
-      - conditions: "{{ should_close_blind }}"
+      # Ouvrir la fenêtre Velux si demandé
+      - conditions: "{{ 'open_velux' in actions }}"
+        sequence:
+          - service: cover.open_cover
+            target:
+              entity_id: !input velux
+
+      # Fermer la fenêtre Velux si demandé
+      - conditions: "{{ 'close_velux' in actions }}"
+        sequence:
+          - service: cover.close_cover
+            target:
+              entity_id: !input velux
+
+      # Fermer le volet (avec gestion fenêtre ouverte)
+      - conditions: "{{ 'close_volet' in actions }}"
         sequence:
           - choose:
-              - conditions: "{{ states(window) == 'open' }}"
+              - conditions: "{{ velux_open }}"
                 sequence:
                   - service: cover.close_cover
                     target:
-                      entity_id: "{{ window }}"
+                      entity_id: !input velux
                   - delay: "00:00:10"
                   - service: cover.close_cover
                     target:
-                      entity_id: "{{ blind }}"
+                      entity_id: !input volet
                   - delay: "00:00:30"
                   - service: cover.open_cover
                     target:
-                      entity_id: "{{ window }}"
-              default:
-                - choose:
-                    - conditions: "{{ states(blind) != 'closed' }}"
-                      sequence:
-                        - service: cover.close_cover
-                          target:
-                            entity_id: "{{ blind }}"
-
-      - conditions: "{{ should_open_blind }}"
-        sequence:
-          - choose:
-              - conditions: "{{ states(blind) != 'open' }}"
-                sequence:
-                  - service: cover.open_cover
-                    target:
-                      entity_id: "{{ blind }}"
-
-  - choose:
-      - conditions: "{{ should_open_window }}"
-        sequence:
-          - choose:
-              - conditions: "{{ states(window) != 'open' }}"
-                sequence:
-                  - service: cover.open_cover
-                    target:
-                      entity_id: "{{ window }}"
-
-      - conditions: "{{ should_close_window }}"
-        sequence:
-          - choose:
-              - conditions: "{{ states(window) != 'closed' }}"
+                      entity_id: !input velux
+              - conditions: "{{ not velux_open }}"
                 sequence:
                   - service: cover.close_cover
                     target:
-                      entity_id: "{{ window }}"
+                      entity_id: !input volet
+
+      # Ouvrir le volet uniquement s'il ne fait pas nuit
+      - conditions: "{{ 'open_volet' in actions }}"
+        sequence:
+          - choose:
+              - conditions: "{{ is_night }}"
+                sequence:
+                  - service: persistent_notification.create
+                    data:
+                      message: "Ouverture volet refusée la nuit"
+                      title: "Volet fermé la nuit"
+              - conditions: "{{ not is_night }}"
+                sequence:
+                  - service: cover.open_cover
+                    target:
+                      entity_id: !input volet
