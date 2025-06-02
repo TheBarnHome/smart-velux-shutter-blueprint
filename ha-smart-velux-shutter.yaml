@@ -21,7 +21,7 @@ blueprint:
         entity:
           domain: climate
     indoor_temp_rising:
-      name: Tendance température intérieure (en hausse ?)
+      name: Tendance température intérieure à la hausse
       selector:
         entity:
           domain: binary_sensor
