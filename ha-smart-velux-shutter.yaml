@@ -3,8 +3,7 @@ blueprint:
   description: >
     Gère automatiquement l'ouverture/fermeture d'une fenêtre Velux et de son volet
     en fonction de la température intérieure/extérieure, du thermostat, de l'heure et des conditions météo.
-    Ferme automatiquement le volet la nuit ou lors de fortes chaleurs, en s'assurant que la fenêtre est bien fermée.
-    Ouvre automatiquement la fenêtre le matin si les conditions sont réunies.
+    Utilise un moteur d'état pour appliquer uniquement les changements nécessaires.
   domain: automation
   input:
     thermostat:
@@ -37,13 +36,7 @@ blueprint:
         time:
     temp_rising:
       name: Indicateur de tendance température monte (booléen)
-      description: "Entité binaire ou sensor indiquant si la température intérieure monte"
-      selector:
-        entity:
-          domain: binary_sensor
-    temp_falling:
-      name: Indicateur de tendance température descend (booléen)
-      description: "Entité binaire ou sensor indiquant si la température intérieure descend"
+      description: "Entité binaire indiquant si la température intérieure monte"
       selector:
         entity:
           domain: binary_sensor
@@ -55,128 +48,87 @@ trigger:
     minutes: "/5"
   - platform: time
     at: !input sunrise_time
-    id: sunrise_trigger
 
 variables:
   weather_entity: !input weather
   thermostat_entity: !input thermostat
   velux_entity: !input velux
   volet_entity: !input volet
-
   temp_rising_entity: !input temp_rising
-  temp_falling_entity: !input temp_falling
 
   temp_ext: "{{ state_attr(weather_entity, 'temperature') | float(0) }}"
   temp_target: "{{ state_attr(thermostat_entity, 'temperature') | float(22) }}"
   temp_int: "{{ state_attr(thermostat_entity, 'current_temperature') | float(22) }}"
-  is_night: "{{ now().strftime('%H:%M:%S') > (states('input_datetime.sunset_time') or '21:00:00') }}"
   velux_state: "{{ states(velux_entity) }}"
   velux_open: "{{ velux_state in ['opening', 'open'] }}"
   volet_state: "{{ states(volet_entity) }}"
-  volet_closed: "{{ volet_state in ['closing', 'closed'] }}"
+  volet_open: "{{ volet_state in ['opening', 'open'] }}"
   temp_rising: "{{ states(temp_rising_entity) == 'on' }}"
-  temp_falling: "{{ states(temp_falling_entity) == 'on' }}"
-  room_name: "{{ area_name(velux_entity) or 'pièce inconnue' }}"
+  is_night: "{{ now().strftime('%H:%M:%S') > (states('input_datetime.sunset_time') or '21:00:00') }}"
+
+  target_velux_open: >-
+    {{ temp_int > temp_target and temp_ext < temp_int and not temp_rising }}
+  target_volet_open: false
+  target_volet_closed: "{{ is_night }}"
 
 action:
+  - variables:
+      actions: []
+
+  - if: "{{ not target_velux_open and velux_open }}"
+    then:
+      - variables:
+          actions: "{{ actions + ['close_velux'] }}"
+  - if: "{{ target_velux_open and not velux_open }}"
+    then:
+      - variables:
+          actions: "{{ actions + ['open_velux'] }}"
+
+  - if: "{{ target_volet_closed and volet_open }}"
+    then:
+      - variables:
+          actions: "{{ actions + ['close_volet'] }}"
+  - if: "{{ not target_volet_closed and not volet_open }}"
+    then:
+      - variables:
+          actions: "{{ actions + ['open_volet'] }}"
+
   - choose:
-      # Cas 1a : nuit ou forte chaleur et fenêtre ouverte => fermer fenêtre puis volet puis rouvrir fenêtre
-      - conditions:
-          - condition: template
-            value_template: >
-              {{ (is_night or (temp_ext > temp_target and temp_int > temp_target)) and velux_open }}
-          - condition: template
-            value_template: >
-              {{ velux_state != 'closing' and velux_state != 'closed' }}
+      - conditions: "{{ 'close_velux' in actions }}"
         sequence:
           - service: cover.close_cover
             target:
               entity_id: !input velux
-          - delay: "00:00:10"
-          - condition: template
-            value_template: >
-              {{ volet_state != 'closing' and volet_state != 'closed' }}
-          - service: cover.close_cover
-            target:
-              entity_id: !input volet
-          - delay: "00:00:30"
-          - condition: template
-            value_template: >
-              {{ velux_state != 'opening' and velux_state != 'open' }}
-          - service: cover.open_cover
-            target:
-              entity_id: !input velux
-
-      # Cas 1b : nuit ou forte chaleur et fenêtre fermée => fermer volet
-      - conditions:
-          - condition: template
-            value_template: >
-              {{ (is_night or (temp_ext > temp_target and temp_int > temp_target)) and not velux_open }}
-          - condition: template
-            value_template: >
-              {{ volet_state != 'closing' and volet_state != 'closed' }}
-        sequence:
-          - service: cover.close_cover
-            target:
-              entity_id: !input volet
-
-      # Cas 2 : température > consigne, température monte, fenêtre ouverte => fermer fenêtre puis volet
-      - conditions:
-          - condition: template
-            value_template: >
-              {{ temp_int > temp_target and temp_rising and velux_open }}
-          - condition: template
-            value_template: >
-              {{ velux_state != 'closing' and velux_state != 'closed' }}
-        sequence:
-          - service: cover.close_cover
-            target:
-              entity_id: !input velux
-          - delay: "00:00:10"
-          - condition: template
-            value_template: >
-              {{ volet_state != 'closing' and volet_state != 'closed' }}
-          - service: cover.close_cover
-            target:
-              entity_id: !input volet
-
-      # Cas 3 : température > consigne, température extérieure plus basse, pas nuit, fenêtre fermée => ouvrir fenêtre
-      - conditions:
-          - condition: template
-            value_template: >
-              {{ temp_int > temp_target and temp_ext < temp_int and not is_night and not velux_open }}
-          - condition: template
-            value_template: >
-              {{ velux_state != 'opening' and velux_state != 'open' }}
+  - choose:
+      - conditions: "{{ 'open_velux' in actions }}"
         sequence:
           - service: cover.open_cover
             target:
               entity_id: !input velux
-
-      # Cas 4 : température <= consigne et fenêtre ouverte => fermer fenêtre
-      - conditions:
-          - condition: template
-            value_template: >
-              {{ temp_int <= temp_target and velux_open }}
-          - condition: template
-            value_template: >
-              {{ velux_state != 'closing' and velux_state != 'closed' }}
+  - choose:
+      - conditions: "{{ 'close_volet' in actions }}"
         sequence:
-          - service: cover.close_cover
-            target:
-              entity_id: !input velux
-
-      # Cas 5 : ouverture automatique matin si conditions réunies => ouvrir fenêtre
-      - conditions:
-          - condition: trigger
-            id: sunrise_trigger
-          - condition: template
-            value_template: >
-              {{ temp_int > temp_target and temp_ext < temp_int and not velux_open }}
-          - condition: template
-            value_template: >
-              {{ velux_state != 'opening' and velux_state != 'open' }}
+          - choose:
+              - conditions: "{{ velux_open }}"
+                sequence:
+                  - service: cover.close_cover
+                    target:
+                      entity_id: !input velux
+                  - delay: "00:00:10"
+                  - service: cover.close_cover
+                    target:
+                      entity_id: !input volet
+                  - delay: "00:00:30"
+                  - service: cover.open_cover
+                    target:
+                      entity_id: !input velux
+              default:
+                - service: cover.close_cover
+                  target:
+                    entity_id: !input volet
+  - choose:
+      - conditions: "{{ 'open_volet' in actions }}"
         sequence:
           - service: cover.open_cover
             target:
-              entity_id: !input velux
+              entity_id: !input volet
