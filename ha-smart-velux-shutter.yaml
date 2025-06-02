@@ -78,7 +78,34 @@ variables:
 
 action:
   - choose:
-      # Cas 1 : température > consigne, température monte, fenêtre ouverte => fermer fenêtre puis volet
+      # Cas 1 : nuit ou forte chaleur => fermer volet (et sécuriser fenêtre si ouverte)
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ is_night or (temp_ext > temp_target and temp_int > temp_target) }}
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ velux_open }}"
+                sequence:
+                  - service: cover.close_cover
+                    target:
+                      entity_id: !input velux
+                  - delay: "00:00:10"
+                  - service: cover.close_cover
+                    target:
+                      entity_id: !input volet
+                  - delay: "00:00:30"
+                  - service: cover.open_cover
+                    target:
+                      entity_id: !input velux
+              default:
+                - service: cover.close_cover
+                  target:
+                    entity_id: !input volet
+
+      # Cas 2 : température > consigne, température monte, fenêtre ouverte => fermer fenêtre puis volet
       - conditions:
           - condition: template
             value_template: >
@@ -92,17 +119,7 @@ action:
             target:
               entity_id: !input volet
 
-      # Cas 1 bis : température > consigne, température monte, fenêtre fermée => fermer volet
-      - conditions:
-          - condition: template
-            value_template: >
-              {{ temp_int > temp_target and temp_rising and not velux_open }}
-        sequence:
-          - service: cover.close_cover
-            target:
-              entity_id: !input volet
-
-      # Cas 2 : température > consigne, température extérieure plus basse, pas nuit => ouvrir fenêtre
+      # Cas 3 : température > consigne, température extérieure plus basse, pas nuit => ouvrir fenêtre
       - conditions:
           - condition: template
             value_template: >
@@ -112,31 +129,13 @@ action:
             target:
               entity_id: !input velux
 
-      # Cas 3 : température <= consigne et fenêtre ouverte => fermer fenêtre
+      # Cas 4 : température <= consigne et fenêtre ouverte => fermer fenêtre
       - conditions:
           - condition: template
             value_template: >
               {{ temp_int <= temp_target and velux_open }}
         sequence:
           - service: cover.close_cover
-            target:
-              entity_id: !input velux
-
-      # Cas 4 : nuit ou forte chaleur => fermer volet (et sécuriser fenêtre si ouverte)
-      - conditions:
-          - condition: template
-            value_template: >
-              {{ is_night or (temp_ext > temp_target and temp_int > temp_target) }}
-        sequence:
-          - service: cover.close_cover
-            target:
-              entity_id: !input velux
-          - delay: "00:00:10"
-          - service: cover.close_cover
-            target:
-              entity_id: !input volet
-          - delay: "00:00:30"
-          - service: cover.open_cover
             target:
               entity_id: !input velux
 
