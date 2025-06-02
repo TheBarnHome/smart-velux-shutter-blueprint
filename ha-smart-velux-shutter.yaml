@@ -49,6 +49,7 @@ trigger:
     minutes: "/5"  # Vérifie toutes les 5 minutes
   - platform: time
     at: !input sunrise_time
+    id: sunrise_trigger
 
 variables:
   temp_ext: "{{ state_attr(blueprint.input.weather, 'temperature') | float(0) }}"
@@ -110,7 +111,7 @@ action:
                   - service: notify.mobile_app_{{ device_attr(blueprint.input.notify_device, 'name') | lower | replace(" ", "_") }}
                     data:
                       message: "Fermeture du volet dans {{ room_name }} après sécurisation de la fenêtre Velux."
-          - default:
+            default:
               - service: cover.close_cover
                 target:
                   entity_id: !input volet
