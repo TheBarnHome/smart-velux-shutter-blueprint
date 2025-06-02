@@ -46,7 +46,7 @@ mode: single
 
 trigger:
   - platform: time_pattern
-    minutes: "/5"  # Vérifie toutes les 5 minutes
+    minutes: "/5"
   - platform: time
     at: !input sunrise_time
     id: sunrise_trigger
@@ -56,7 +56,8 @@ variables:
   thermostat_entity: !input thermostat
   velux_entity: !input velux
   volet_entity: !input volet
-  notify_device_name: "{{ device_attr(!input notify_device, 'name') | lower | replace(' ', '_') }}"
+  notify_device_id: !input notify_device
+
   temp_ext: "{{ state_attr(weather_entity, 'temperature') | float(0) }}"
   temp_target: "{{ state_attr(thermostat_entity, 'temperature') | float(22) }}"
   temp_int: "{{ state_attr(thermostat_entity, 'current_temperature') | float(22) }}"
@@ -65,6 +66,9 @@ variables:
   velux_open: "{{ velux_state in ['opening', 'open'] }}"
   temp_diff: "{{ temp_int - temp_ext }}"
   room_name: "{{ area_name(velux_entity) or 'pièce inconnue' }}"
+  notify_device_name: >
+    {% set dev = device_attr(notify_device_id, 'name') %}
+    {{ dev | lower | replace(' ', '_') }}
 
 action:
   - choose:
