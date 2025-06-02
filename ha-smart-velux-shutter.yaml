@@ -68,41 +68,12 @@ variables:
   temp_rising: "{{ states(temp_rising_entity) == 'on' }}"
   room_name: "{{ area_name(velux_entity) or 'pièce inconnue' }}"
 
-  # Moteur d'état calculé
-  actions: >-
-    {% set acts = [] %}
-    {# Cas 1a : température > consigne, température monte, fenêtre fermée => fermer volet #}
-    {% if temp_int > temp_target and temp_rising and not velux_open %}
-      {% set _ = acts.append('close_volet') %}
-    {# Cas 1b : température > consigne, température monte, fenêtre ouverte => fermer fenêtre puis volet #}
-    {% elif temp_int > temp_target and temp_rising and velux_open %}
-      {% set _ = acts.append('close_velux') %}
-      {% set _ = acts.append('close_volet') %}
-    {# Cas 2 : température > consigne, température extérieure plus basse => ouvrir fenêtre #}
-    {% elif temp_int > temp_target and temp_ext < temp_int %}
-      {% set _ = acts.append('open_velux') %}
-    {# Cas 3 : température <= consigne, fenêtre ouverte => fermer fenêtre #}
-    {% elif temp_int <= temp_target and velux_open %}
-      {% set _ = acts.append('close_velux') %}
-    {# Cas 4 : par défaut, on n'ouvre rien #}
-    {% endif %}
-    {{ acts }}
-
 action:
   - choose:
-      # Priorité 0 : nuit, volet toujours fermé
+      # Cas 0 : nuit, volet toujours fermé (fermeture fenêtre si ouverte)
       - conditions:
           - condition: template
             value_template: "{{ is_night }}"
-        sequence:
-          - service: cover.close_cover
-            target:
-              entity_id: !input volet
-  - choose:
-      # Cas 1a et 1b : fermer volet ou fenêtre + volet selon cas
-      - conditions:
-          - condition: template
-            value_template: "{{ 'close_volet' in actions }}"
         sequence:
           - choose:
               - conditions:
@@ -116,27 +87,47 @@ action:
                   - service: cover.close_cover
                     target:
                       entity_id: !input volet
-                  - delay: "00:00:30"
-                  - service: cover.open_cover
-                    target:
-                      entity_id: !input velux
               default:
                 - service: cover.close_cover
                   target:
                     entity_id: !input volet
-  - choose:
+
+      # Cas 1a : température > consigne, température monte, fenêtre ouverte => fermer fenêtre puis volet
       - conditions:
           - condition: template
-            value_template: "{{ 'close_velux' in actions }}"
+            value_template: "{{ temp_int > temp_target and temp_rising and velux_open }}"
         sequence:
           - service: cover.close_cover
             target:
               entity_id: !input velux
-  - choose:
+          - delay: "00:00:10"
+          - service: cover.close_cover
+            target:
+              entity_id: !input volet
+
+      # Cas 1b : température > consigne, température monte, fenêtre fermée => fermer volet
       - conditions:
           - condition: template
-            value_template: "{{ 'open_velux' in actions }}"
+            value_template: "{{ temp_int > temp_target and temp_rising and not velux_open }}"
+        sequence:
+          - service: cover.close_cover
+            target:
+              entity_id: !input volet
+
+      # Cas 2 : température > consigne, température extérieure plus basse => ouvrir fenêtre
+      - conditions:
+          - condition: template
+            value_template: "{{ temp_int > temp_target and temp_ext < temp_int }}"
         sequence:
           - service: cover.open_cover
+            target:
+              entity_id: !input velux
+
+      # Cas 3 : température <= consigne et fenêtre ouverte => fermer fenêtre
+      - conditions:
+          - condition: template
+            value_template: "{{ temp_int <= temp_target and velux_open }}"
+        sequence:
+          - service: cover.close_cover
             target:
               entity_id: !input velux
