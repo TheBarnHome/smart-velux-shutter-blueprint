@@ -92,6 +92,16 @@ action:
             target:
               entity_id: !input volet
 
+      # Cas 1 bis : température > consigne, température monte, fenêtre fermée => fermer volet
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ temp_int > temp_target and temp_rising and not velux_open }}
+        sequence:
+          - service: cover.close_cover
+            target:
+              entity_id: !input volet
+
       # Cas 2 : température > consigne, température extérieure plus basse, pas nuit => ouvrir fenêtre
       - conditions:
           - condition: template
