@@ -52,14 +52,19 @@ trigger:
     id: sunrise_trigger
 
 variables:
-  temp_ext: "{{ state_attr(blueprint.input.weather, 'temperature') | float(0) }}"
-  temp_target: "{{ state_attr(blueprint.input.thermostat, 'temperature') | float(22) }}"
-  temp_int: "{{ state_attr(blueprint.input.thermostat, 'current_temperature') | float(22) }}"
-  is_night: "{{ now().hour >= (states('input_datetime.sunset_time') | as_datetime).hour }}"
-  velux_state: "{{ states(blueprint.input.velux) }}"
+  weather_entity: !input weather
+  thermostat_entity: !input thermostat
+  velux_entity: !input velux
+  volet_entity: !input volet
+  notify_device_name: "{{ device_attr(!input notify_device, 'name') | lower | replace(' ', '_') }}"
+  temp_ext: "{{ state_attr(weather_entity, 'temperature') | float(0) }}"
+  temp_target: "{{ state_attr(thermostat_entity, 'temperature') | float(22) }}"
+  temp_int: "{{ state_attr(thermostat_entity, 'current_temperature') | float(22) }}"
+  is_night: "{{ now().strftime('%H:%M:%S') > (states('input_datetime.sunset_time') or '21:00:00') }}"
+  velux_state: "{{ states(velux_entity) }}"
   velux_open: "{{ velux_state in ['opening', 'open'] }}"
   temp_diff: "{{ temp_int - temp_ext }}"
-  room_name: "{{ area_name(blueprint.input.velux) or 'pièce inconnue' }}"
+  room_name: "{{ area_name(velux_entity) or 'pièce inconnue' }}"
 
 action:
   - choose:
@@ -71,7 +76,7 @@ action:
           - service: cover.open_cover
             target:
               entity_id: !input velux
-          - service: notify.mobile_app_{{ device_attr(blueprint.input.notify_device, 'name') | lower | replace(" ", "_") }}
+          - service: "notify.mobile_app_{{ notify_device_name }}"
             data:
               message: "Ouverture de la fenêtre Velux dans {{ room_name }} pour rafraîchir la pièce."
 
@@ -83,7 +88,7 @@ action:
           - service: cover.close_cover
             target:
               entity_id: !input velux
-          - service: notify.mobile_app_{{ device_attr(blueprint.input.notify_device, 'name') | lower | replace(" ", "_") }}
+          - service: "notify.mobile_app_{{ notify_device_name }}"
             data:
               message: "Fermeture de la fenêtre Velux dans {{ room_name }} (température atteinte)."
 
@@ -108,14 +113,14 @@ action:
                   - service: cover.open_cover
                     target:
                       entity_id: !input velux
-                  - service: notify.mobile_app_{{ device_attr(blueprint.input.notify_device, 'name') | lower | replace(" ", "_") }}
+                  - service: "notify.mobile_app_{{ notify_device_name }}"
                     data:
                       message: "Fermeture du volet dans {{ room_name }} après sécurisation de la fenêtre Velux."
             default:
               - service: cover.close_cover
                 target:
                   entity_id: !input volet
-              - service: notify.mobile_app_{{ device_attr(blueprint.input.notify_device, 'name') | lower | replace(" ", "_") }}
+              - service: "notify.mobile_app_{{ notify_device_name }}"
                 data:
                   message: "Fermeture du volet automatique dans {{ room_name }}."
 
@@ -129,6 +134,6 @@ action:
           - service: cover.open_cover
             target:
               entity_id: !input velux
-          - service: notify.mobile_app_{{ device_attr(blueprint.input.notify_device, 'name') | lower | replace(" ", "_") }}
+          - service: "notify.mobile_app_{{ notify_device_name }}"
             data:
               message: "Ouverture automatique du matin de la fenêtre Velux dans {{ room_name }}."
