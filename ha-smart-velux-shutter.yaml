@@ -87,10 +87,10 @@ action:
                   - service: cover.close_cover
                     target:
                       entity_id: !input volet
-              default:
-                - service: cover.close_cover
-                  target:
-                    entity_id: !input volet
+                default:
+                  - service: cover.close_cover
+                    target:
+                      entity_id: !input volet
 
       # Cas 1a : température > consigne, température monte, fenêtre ouverte => fermer fenêtre puis volet
       - conditions:
