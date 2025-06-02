@@ -71,9 +71,9 @@ variables:
       {{ now() >= ns and now() < ne }}
     {% endif %}
 
-  should_close_blind: "{{ is_night or (current_temp > target_temp and temp_rising) }}"
+  should_close_blind: "{{ (is_night or (current_temp > target_temp and temp_rising)) and blind_state != 'closed' }}"
   should_open_blind: "{{ not should_close_blind }}"
-  should_open_window: "{{ current_temp > target_temp and outdoor_temp < current_temp }}"
+  should_open_window: "{{ current_temp > target_temp and outdoor_temp < current_temp and window_state != 'opened' }}"
   should_close_window: "{{ not should_open_window }}"
 
 action:
