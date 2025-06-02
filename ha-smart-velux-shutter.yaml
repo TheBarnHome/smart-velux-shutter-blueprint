@@ -1,106 +1,93 @@
 blueprint:
-  name: Gestion intelligente Velux et Volet
+  name: "Gestion intelligente Velux et Volet"
   description: >
-    Ouvre ou ferme automatiquement le Velux pour réguler la température, et gère le volet en fonction de la température, de l'ensoleillement, de l'heure et de l'état de la fenêtre.
+    Gère automatiquement l'ouverture/fermeture d'une fenêtre Velux et de son volet
+    en fonction de la température intérieure/extérieure, du thermostat, de l'heure et des conditions météo.
+    Ferme automatiquement le volet la nuit ou lors de fortes chaleurs, en s'assurant que la fenêtre est bien fermée.
+    Envoie une notification en cas de changement d'état de la fenêtre ou du volet.
   domain: automation
   input:
-    climate_thermostat:
+    thermostat:
       name: Thermostat de la pièce
       selector:
         entity:
           domain: climate
-    temperature_inside:
-      name: Température intérieure
+    temp_int:
+      name: Capteur de température intérieure
       selector:
         entity:
           domain: sensor
           device_class: temperature
-    temperature_outside:
-      name: Température extérieure
-      selector:
-        entity:
-          domain: sensor
-          device_class: temperature
-    velux:
-      name: Fenêtre Velux (cover)
-      selector:
-        entity:
-          domain: cover
-    velux_open_sensor:
-      name: Capteur d'état d'ouverture de la fenêtre (binary_sensor)
-      selector:
-        entity:
-          domain: binary_sensor
-          device_class: opening
-    volet:
-      name: Volet roulant (cover)
-      selector:
-        entity:
-          domain: cover
-    weather_entity:
-      name: Entité météo Météo-France
+    weather:
+      name: Entité météo (Météo-France)
       selector:
         entity:
           domain: weather
-    night_start:
-      name: Début de la nuit (fermeture volet forcée)
-      default: "22:00:00"
+    velux:
+      name: Entité de la fenêtre Velux
       selector:
-        time: {}
-    night_end:
-      name: Fin de la nuit (réouverture possible)
-      default: "07:00:00"
+        entity:
+          domain: cover
+    volet:
+      name: Entité du volet roulant
       selector:
-        time: {}
+        entity:
+          domain: cover
+    sunset_time:
+      name: Heure de fermeture du volet (soir)
+      selector:
+        time:
+    notify_device:
+      name: Appareil à notifier
+      selector:
+        device:
+          integration: mobile_app
 
 mode: single
 
 trigger:
   - platform: time_pattern
-    minutes: "/5"  # vérifie toutes les 5 minutes
-  - platform: state
-    entity_id: !input velux_open_sensor
+    minutes: "/5"  # Vérifie toutes les 5 minutes
 
-condition: []
+variables:
+  temp_ext: "{{ state_attr(blueprint.input.weather, 'temperature') | float(0) }}"
+  temp_int: "{{ states(blueprint.input.temp_int) | float(0) }}"
+  temp_target: "{{ state_attr(blueprint.input.thermostat, 'temperature') | float(22) }}"
+  is_night: "{{ now().hour >= (states('input_datetime.sunset_time') | as_datetime).hour }}"
+  velux_state: "{{ states(blueprint.input.velux) }}"
+  velux_open: "{{ velux_state in ['opening', 'open'] }}"
+  temp_diff: "{{ temp_int - temp_ext }}"
 
 action:
-  - variables:
-      thermostat: !input climate_thermostat
-      temp_inside: states(!input temperature_inside) | float(0)
-      temp_outside: states(!input temperature_outside) | float(0)
-      temp_target: state_attr(!input climate_thermostat, 'temperature') | float(0)
-      velux_open: is_state(!input velux_open_sensor, 'on')
-      weather: states(!input weather_entity)
-      is_daytime: >
-        {{ now().strftime('%H:%M:%S') >= !input.night_end and now().strftime('%H:%M:%S') < !input.night_start }}
-      is_night: >
-        {{ not is_daytime }}
-      sunny: >
-        {{ weather in ['sunny', 'clear-night', 'partlycloudy', 'partly-cloudy'] }}
-
   - choose:
-      ### 🔁 CAS 1 : Température trop élevée, air extérieur plus frais → OUVRIR VELUX
       - conditions:
           - condition: template
-            value_template: "{{ temp_inside > temp_target and temp_outside < temp_inside }}"
+            value_template: >
+              {{ temp_int > temp_target and temp_ext < temp_int and not is_night }}
         sequence:
           - service: cover.open_cover
             target:
               entity_id: !input velux
+          - service: notify.mobile_app_{{ device_attr(blueprint.input.notify_device, 'name') | lower | replace(" ", "_") }}
+            data:
+              message: "Ouverture de la fenêtre Velux pour rafraîchir la pièce."
 
-      ### 🔁 CAS 2 : Température OK → FERMER VELUX
       - conditions:
           - condition: template
-            value_template: "{{ temp_inside <= temp_target }}"
+            value_template: >
+              {{ temp_int <= temp_target and velux_open }}
         sequence:
           - service: cover.close_cover
             target:
               entity_id: !input velux
+          - service: notify.mobile_app_{{ device_attr(blueprint.input.notify_device, 'name') | lower | replace(" ", "_") }}
+            data:
+              message: "Fermeture de la fenêtre Velux (température atteinte)."
 
-      ### 🌙 CAS 3 : Il fait nuit → FERMER le VOLET si ce n'est pas déjà fait
       - conditions:
           - condition: template
-            value_template: "{{ is_night }}"
+            value_template: >
+              {{ is_night or (temp_ext > temp_target and temp_int > temp_target) }}
         sequence:
           - choose:
               - conditions:
@@ -118,48 +105,13 @@ action:
                   - service: cover.open_cover
                     target:
                       entity_id: !input velux
-              - conditions:
-                  - condition: template
-                    value_template: "{{ not velux_open }}"
-                sequence:
-                  - service: cover.close_cover
-                    target:
-                      entity_id: !input volet
-
-      ### ☀️ CAS 4 : Il fait jour et trop chaud, soleil fort → FERMER le VOLET si possible
-      - conditions:
-          - condition: template
-            value_template: "{{ is_daytime and temp_inside > temp_target and sunny }}"
-        sequence:
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: "{{ velux_open }}"
-                sequence:
-                  - service: cover.close_cover
-                    target:
-                      entity_id: !input velux
-                  - delay: "00:00:10"
-                  - service: cover.close_cover
-                    target:
-                      entity_id: !input volet
-                  - delay: "00:00:30"
-                  - service: cover.open_cover
-                    target:
-                      entity_id: !input velux
-              - conditions:
-                  - condition: template
-                    value_template: "{{ not velux_open }}"
-                sequence:
-                  - service: cover.close_cover
-                    target:
-                      entity_id: !input volet
-
-      ### 🌥️ CAS 5 : Soleil faible ou température confortable → OUVRIR le VOLET
-      - conditions:
-          - condition: template
-            value_template: "{{ is_daytime and (temp_inside <= temp_target or not sunny) }}"
-        sequence:
-          - service: cover.open_cover
-            target:
-              entity_id: !input volet
+                  - service: notify.mobile_app_{{ device_attr(blueprint.input.notify_device, 'name') | lower | replace(" ", "_") }}
+                    data:
+                      message: "Fermeture du volet après sécurisation de la fenêtre Velux."
+          - default:
+              - service: cover.close_cover
+                target:
+                  entity_id: !input volet
+              - service: notify.mobile_app_{{ device_attr(blueprint.input.notify_device, 'name') | lower | replace(" ", "_") }}
+                data:
+                  message: "Fermeture du volet automatique."
