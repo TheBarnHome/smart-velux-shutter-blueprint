@@ -12,12 +12,6 @@ blueprint:
       selector:
         entity:
           domain: climate
-    temp_int:
-      name: Capteur de température intérieure
-      selector:
-        entity:
-          domain: sensor
-          device_class: temperature
     weather:
       name: Entité météo (Météo-France)
       selector:
@@ -51,12 +45,13 @@ trigger:
 
 variables:
   temp_ext: "{{ state_attr(blueprint.input.weather, 'temperature') | float(0) }}"
-  temp_int: "{{ states(blueprint.input.temp_int) | float(0) }}"
   temp_target: "{{ state_attr(blueprint.input.thermostat, 'temperature') | float(22) }}"
+  temp_int: "{{ state_attr(blueprint.input.thermostat, 'current_temperature') | float(22) }}"
   is_night: "{{ now().hour >= (states('input_datetime.sunset_time') | as_datetime).hour }}"
   velux_state: "{{ states(blueprint.input.velux) }}"
   velux_open: "{{ velux_state in ['opening', 'open'] }}"
   temp_diff: "{{ temp_int - temp_ext }}"
+  room_name: "{{ area_name(blueprint.input.velux) or 'pièce inconnue' }}"
 
 action:
   - choose:
@@ -70,7 +65,7 @@ action:
               entity_id: !input velux
           - service: notify.mobile_app_{{ device_attr(blueprint.input.notify_device, 'name') | lower | replace(" ", "_") }}
             data:
-              message: "Ouverture de la fenêtre Velux pour rafraîchir la pièce."
+              message: "Ouverture de la fenêtre Velux dans {{ room_name }} pour rafraîchir la pièce."
 
       - conditions:
           - condition: template
@@ -82,7 +77,7 @@ action:
               entity_id: !input velux
           - service: notify.mobile_app_{{ device_attr(blueprint.input.notify_device, 'name') | lower | replace(" ", "_") }}
             data:
-              message: "Fermeture de la fenêtre Velux (température atteinte)."
+              message: "Fermeture de la fenêtre Velux dans {{ room_name }} (température atteinte)."
 
       - conditions:
           - condition: template
@@ -107,11 +102,11 @@ action:
                       entity_id: !input velux
                   - service: notify.mobile_app_{{ device_attr(blueprint.input.notify_device, 'name') | lower | replace(" ", "_") }}
                     data:
-                      message: "Fermeture du volet après sécurisation de la fenêtre Velux."
+                      message: "Fermeture du volet dans {{ room_name }} après sécurisation de la fenêtre Velux."
           - default:
               - service: cover.close_cover
                 target:
                   entity_id: !input volet
               - service: notify.mobile_app_{{ device_attr(blueprint.input.notify_device, 'name') | lower | replace(" ", "_") }}
                 data:
-                  message: "Fermeture du volet automatique."
+                  message: "Fermeture du volet automatique dans {{ room_name }}."
