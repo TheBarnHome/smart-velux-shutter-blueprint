@@ -73,9 +73,9 @@ action:
         {{ now().replace(hour=t[0]|int, minute=t[1]|int, second=0, microsecond=0) }}
       is_night: >
         {% if night_start_dt > night_end_dt %}
-          {{ now >= night_start_dt or now < night_end_dt }}
+          {{ now() >= night_start_dt or now() < night_end_dt }}
         {% else %}
-          {{ now >= night_start_dt and now < night_end_dt }}
+          {{ now() >= night_start_dt and now() < night_end_dt }}
         {% endif %}
       current_temp: "{{ state_attr(thermostat, 'current_temperature') | float }}"
       target_temp: "{{ state_attr(thermostat, 'temperature') | float }}"
