@@ -5,7 +5,6 @@ blueprint:
     en fonction de la température intérieure/extérieure, du thermostat, de l'heure et des conditions météo.
     Ferme automatiquement le volet la nuit ou lors de fortes chaleurs, en s'assurant que la fenêtre est bien fermée.
     Ouvre automatiquement la fenêtre le matin si les conditions sont réunies.
-    Envoie une notification en cas de changement d'état de la fenêtre ou du volet.
   domain: automation
   input:
     thermostat:
@@ -36,11 +35,6 @@ blueprint:
       name: Heure d'ouverture automatique du matin
       selector:
         time:
-    notify_device:
-      name: Appareil à notifier
-      selector:
-        device:
-          integration: mobile_app
 
 mode: single
 
@@ -56,7 +50,6 @@ variables:
   thermostat_entity: !input thermostat
   velux_entity: !input velux
   volet_entity: !input volet
-  notify_device_id: !input notify_device
 
   temp_ext: "{{ state_attr(weather_entity, 'temperature') | float(0) }}"
   temp_target: "{{ state_attr(thermostat_entity, 'temperature') | float(22) }}"
@@ -66,9 +59,6 @@ variables:
   velux_open: "{{ velux_state in ['opening', 'open'] }}"
   temp_diff: "{{ temp_int - temp_ext }}"
   room_name: "{{ area_name(velux_entity) or 'pièce inconnue' }}"
-  notify_device_name: >
-    {% set dev = device_attr(notify_device_id, 'name') %}
-    {{ dev | lower | replace(' ', '_') }}
 
 action:
   - choose:
@@ -80,9 +70,6 @@ action:
           - service: cover.open_cover
             target:
               entity_id: !input velux
-          - service: "notify.mobile_app_{{ notify_device_name }}"
-            data:
-              message: "Ouverture de la fenêtre Velux dans {{ room_name }} pour rafraîchir la pièce."
 
       - conditions:
           - condition: template
@@ -92,9 +79,6 @@ action:
           - service: cover.close_cover
             target:
               entity_id: !input velux
-          - service: "notify.mobile_app_{{ notify_device_name }}"
-            data:
-              message: "Fermeture de la fenêtre Velux dans {{ room_name }} (température atteinte)."
 
       - conditions:
           - condition: template
@@ -117,16 +101,10 @@ action:
                   - service: cover.open_cover
                     target:
                       entity_id: !input velux
-                  - service: "notify.mobile_app_{{ notify_device_name }}"
-                    data:
-                      message: "Fermeture du volet dans {{ room_name }} après sécurisation de la fenêtre Velux."
             default:
               - service: cover.close_cover
                 target:
                   entity_id: !input volet
-              - service: "notify.mobile_app_{{ notify_device_name }}"
-                data:
-                  message: "Fermeture du volet automatique dans {{ room_name }}."
 
       - conditions:
           - condition: trigger
@@ -138,6 +116,3 @@ action:
           - service: cover.open_cover
             target:
               entity_id: !input velux
-          - service: "notify.mobile_app_{{ notify_device_name }}"
-            data:
-              message: "Ouverture automatique du matin de la fenêtre Velux dans {{ room_name }}."
