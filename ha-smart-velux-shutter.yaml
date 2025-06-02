@@ -144,10 +144,10 @@ action:
                   - service: cover.open_cover
                     target:
                       entity_id: !input velux
-            default:
-              - service: cover.close_cover
-                target:
-                  entity_id: !input volet
+                default:
+                  - service: cover.close_cover
+                    target:
+                      entity_id: !input volet
 
       # Cas 5 : ouverture automatique matin si conditions réunies
       - conditions:
