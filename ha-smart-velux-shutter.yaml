@@ -1,17 +1,15 @@
 blueprint:
-  name: Gestion Velux et Volet Automatique
-  description: >
-    Gère automatiquement l'ouverture et la fermeture d'une fenêtre de toit Velux et de son volet
-    selon la température intérieure/extérieure, la consigne de thermostat, la nuit, et la tendance.
+  name: Gestion Velux et Volet
+  description: Automatisation intelligente de l’ouverture/fermeture d’une fenêtre de toit Velux et de son volet selon la température, la météo et l’heure.
   domain: automation
   input:
-    velux_window:
-      name: Fenêtre Velux
+    window_entity:
+      name: Entité de la fenêtre
       selector:
         entity:
           domain: cover
-    velux_blind:
-      name: Volet Velux
+    blind_entity:
+      name: Entité du volet
       selector:
         entity:
           domain: cover
@@ -20,13 +18,13 @@ blueprint:
       selector:
         entity:
           domain: climate
-    indoor_temp_rising:
-      name: Température intérieure en hausse (booléen)
+    temp_rising_entity:
+      name: Entité de tendance à la hausse de température (binary_sensor)
       selector:
         entity:
           domain: binary_sensor
-    weather:
-      name: Entité météo (Météo-France)
+    weather_entity:
+      name: Entité météo (Météo France)
       selector:
         entity:
           domain: weather
@@ -38,96 +36,109 @@ blueprint:
       name: Heure de fin de nuit
       selector:
         time: {}
+    notify_device:
+      name: Appareil pour la notification
+      description: Entité du type notify.* (ex: notify.mobile_app_mon_telephone)
+      selector:
+        entity:
+          domain: notify
 
 mode: single
 
 trigger:
   - platform: time_pattern
-    minutes: "/15"
+    minutes: "/5"
+  - platform: state
+    entity_id:
+      - !input thermostat
+      - !input temp_rising_entity
+      - !input weather_entity
 
 variables:
-  window: !input velux_window
-  blind: !input velux_blind
+  window_entity: !input window_entity
+  blind_entity: !input blind_entity
   thermostat: !input thermostat
-  temp_rising_entity: !input indoor_temp_rising
-  weather: !input weather
+  temp_rising_entity: !input temp_rising_entity
+  weather_entity: !input weather_entity
+  notify_device: !input notify_device
   night_start: !input night_start
   night_end: !input night_end
-  current_temp: "{{ state_attr(thermostat, 'current_temperature') | float }}"
-  target_temp: "{{ state_attr(thermostat, 'temperature') | float }}"
-  outdoor_temp: "{{ state_attr(weather, 'temperature') | float }}"
-  temp_rising: "{{ is_state(temp_rising_entity, 'on') }}"
-  window_state: "{{ states[window].state }}"
-  blind_state: "{{ states[blind].state }}"
 
+  night_start_dt: >
+    {{ today_at(night_start) }}
+  night_end_dt: >
+    {{ today_at(night_end) }}
   is_night: >
-    {% set t1 = night_start.split(':') %}
-    {% set t2 = night_end.split(':') %}
-    {% set ns = now().replace(hour=t1[0]|int, minute=t1[1]|int, second=0, microsecond=0) %}
-    {% set ne = now().replace(hour=t2[0]|int, minute=t2[1]|int, second=0, microsecond=0) %}
-    {% if ns > ne %}
-      {{ now() >= ns or now() < ne }}
+    {% if night_start_dt > night_end_dt %}
+      {{ now() >= night_start_dt or now() < night_end_dt }}
     {% else %}
-      {{ now() >= ns and now() < ne }}
+      {{ now() >= night_start_dt and now() < night_end_dt }}
     {% endif %}
 
-  should_close_blind: "{{ (is_night or (current_temp > (target_temp + 1) and temp_rising)) and blind_state != 'closed' }}"
-  should_open_blind: "{{ not is_night and (current_temp <= (target_temp - 1) or not temp_rising) and blind_state != 'open' }}"
-  should_open_window: "{{ current_temp > (target_temp + 1) and outdoor_temp < current_temp and window_state != 'open' }}"
-  should_close_window: "{{ (current_temp < (target_temp - 1) or outdoor_temp >= current_temp) and window_state != 'closed' }}"
+  current_temp: "{{ state_attr(thermostat, 'current_temperature') | float(0) }}"
+  target_temp: "{{ state_attr(thermostat, 'temperature') | float(0) }}"
+  outdoor_temp: "{{ state_attr(weather_entity, 'temperature') | float(0) }}"
+  temp_rising: "{{ is_state(temp_rising_entity, 'on') }}"
+  window_state: "{{ states(window_entity) }}"
+  blind_state: "{{ states(blind_entity) }}"
+  room_name: >
+    {{ window_entity.split('.')[-1].split('_')[-1] | replace('-', ' ') | capitalize }}
+
+  should_close_blind: >
+    {{ (is_night or (current_temp > (target_temp + 1) and temp_rising)) and blind_state != 'closed' }}
+  should_open_blind: >
+    {{ not is_night and (current_temp <= (target_temp + 1) or not temp_rising) and blind_state != 'open' }}
+
+  should_open_window: >
+    {{ current_temp > (target_temp + 1) and outdoor_temp < current_temp and window_state != 'open' }}
+  should_close_window: >
+    {{ (current_temp < (target_temp - 1) or outdoor_temp >= current_temp) and window_state != 'closed' }}
 
 action:
   - choose:
-      # --- Si le volet doit être fermé ---
-      - conditions:
-          - condition: template
-            value_template: "{{ should_close_blind }}"
+      - conditions: "{{ should_close_blind }}"
         sequence:
-          # Fermer la fenêtre si elle est ouverte
-          - if:
-              - condition: template
-                value_template: "{{ window_state != 'closed' }}"
+          - if: "{{ window_state == 'open' }}"
             then:
               - service: cover.close_cover
                 target:
-                  entity_id: "{{ window }}"
-              - delay: "00:00:05"
-          # Fermer le volet
+                  entity_id: !input window_entity
+              - delay: "00:00:10"
           - service: cover.close_cover
             target:
-              entity_id: "{{ blind }}"
-          # Rouvrir la fenêtre si elle devait rester ouverte
-          - if:
-              - condition: template
-                value_template: "{{ should_open_window }}"
+              entity_id: !input blind_entity
+          - if: "{{ should_open_window }}"
             then:
-              - delay: "00:00:05"
               - service: cover.open_cover
                 target:
-                  entity_id: "{{ window }}"
+                  entity_id: !input window_entity
+          - service: "{{ notify_device }}"
+            data:
+              message: "Le volet de la {{ room_name }} a été fermé automatiquement."
 
-      # --- Si le volet doit être ouvert ---
-      - conditions:
-          - condition: template
-            value_template: "{{ should_open_blind }}"
+      - conditions: "{{ should_open_blind }}"
         sequence:
           - service: cover.open_cover
             target:
-              entity_id: "{{ blind }}"
+              entity_id: !input blind_entity
+          - service: "{{ notify_device }}"
+            data:
+              message: "Le volet de la {{ room_name }} a été ouvert automatiquement."
 
-  # --- Gérer indépendamment la fenêtre ---
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ should_open_window and window_state != 'open' }}"
-        sequence:
-          - service: cover.open_cover
-            target:
-              entity_id: "{{ window }}"
-      - conditions:
-          - condition: template
-            value_template: "{{ should_close_window and window_state != 'closed' }}"
+      - conditions: "{{ should_close_window }}"
         sequence:
           - service: cover.close_cover
             target:
-              entity_id: "{{ window }}"
+              entity_id: !input window_entity
+          - service: "{{ notify_device }}"
+            data:
+              message: "La fenêtre de la {{ room_name }} a été fermée automatiquement."
+
+      - conditions: "{{ should_open_window }}"
+        sequence:
+          - service: cover.open_cover
+            target:
+              entity_id: !input window_entity
+          - service: "{{ notify_device }}"
+            data:
+              message: "La fenêtre de la {{ room_name }} a été ouverte automatiquement."
