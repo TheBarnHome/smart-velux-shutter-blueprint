@@ -38,7 +38,7 @@ blueprint:
         time: {}
     notify_device:
       name: Appareil pour la notification
-      description: Entité du type notify.* (ex: notify.mobile_app_mon_telephone)
+      description: "Entité du type notify.* (ex: notify.mobile_app_mon_telephone)"
       selector:
         entity:
           domain: notify
