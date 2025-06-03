@@ -36,12 +36,6 @@ blueprint:
       name: Heure de fin de nuit
       selector:
         time: {}
-    notify_device:
-      name: Appareil pour la notification
-      description: Entité du type notify.*
-      selector:
-        entity:
-          domain: notify
 
 mode: single
 
@@ -112,7 +106,7 @@ action:
               - service: cover.open_cover
                 target:
                   entity_id: !input window_entity
-          - service: "{{ notify_device }}"
+          - service: notify.mobile_app_iphone_de_tristan_2
             data:
               message: "Le volet de la {{ room_name }} a été fermé automatiquement."
 
@@ -121,7 +115,7 @@ action:
           - service: cover.open_cover
             target:
               entity_id: !input blind_entity
-          - service: "{{ notify_device }}"
+          - service: notify.mobile_app_iphone_de_tristan_2
             data:
               message: "Le volet de la {{ room_name }} a été ouvert automatiquement."
 
@@ -130,7 +124,7 @@ action:
           - service: cover.close_cover
             target:
               entity_id: !input window_entity
-          - service: "{{ notify_device }}"
+          - service: notify.mobile_app_iphone_de_tristan_2
             data:
               message: "La fenêtre de la {{ room_name }} a été fermée automatiquement."
 
@@ -139,6 +133,6 @@ action:
           - service: cover.open_cover
             target:
               entity_id: !input window_entity
-          - service: "{{ notify_device }}"
+          - service: notify.mobile_app_iphone_de_tristan_2
             data:
               message: "La fenêtre de la {{ room_name }} a été ouverte automatiquement."
