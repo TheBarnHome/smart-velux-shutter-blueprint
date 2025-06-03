@@ -1,6 +1,8 @@
 blueprint:
-  name: Gestion automatique Velux et Volet
-  description: Gère l'ouverture/fermeture d'une fenêtre de toit Velux et son volet selon la température et la période (jour/nuit)
+  name: "Gestion automatique Velux et volet"
+  description: >
+    Ouvre/Ferme la fenêtre de toit et son volet selon la température, la météo,
+    et l’heure (jour/nuit), avec notifications.
   domain: automation
   input:
     window_entity:
@@ -13,64 +15,60 @@ blueprint:
       selector:
         entity:
           domain: cover
-    climate_entity:
-      name: Entité du thermostat de la pièce
+    thermostat_entity:
+      name: Entité du thermostat
       selector:
         entity:
           domain: climate
-    indoor_temp_rising:
-      name: Entité booléenne de tendance à la hausse de température
+    temp_rising_entity:
+      name: Entité booléenne indiquant si la température monte
       selector:
         entity:
           domain: binary_sensor
-    outdoor_weather:
+    meteo_entity:
       name: Entité météo (Météo France)
       selector:
         entity:
           domain: weather
     night_start:
-      name: Heure de début de nuit
+      name: Heure début de nuit
       selector:
         time: {}
     night_end:
-      name: Heure de fin de nuit
+      name: Heure fin de nuit
       selector:
         time: {}
-
-mode: single
 
 trigger:
   - platform: time_pattern
     minutes: "/5"
-  - platform: state
-    entity_id:
-      - !input window_entity
-      - !input blind_entity
-      - !input climate_entity
-      - !input indoor_temp_rising
-      - !input outdoor_weather
 
 variables:
-  window_entity: !input window_entity
-  blind_entity: !input blind_entity
-  climate_entity: !input climate_entity
-  temp_rising_entity: !input indoor_temp_rising
-  outdoor_weather_entity: !input outdoor_weather
-  notify_target: notify.mobile_app_iphone_de_tristan_2
+  window: !input window_entity
+  blind: !input blind_entity
+  thermostat: !input thermostat_entity
+  temp_rising_entity: !input temp_rising_entity
+  meteo_entity: !input meteo_entity
 
-  current_temp: "{{ state_attr(climate_entity, 'current_temperature') | float }}"
-  target_temp: "{{ state_attr(climate_entity, 'temperature') | float }}"
-  delta: 1
-  min_temp: "{{ target_temp - delta }}"
-  max_temp: "{{ target_temp + delta }}"
-
-  outdoor_temp: "{{ state_attr(outdoor_weather_entity, 'temperature') | float }}"
+  current_temp: "{{ state_attr(thermostat, 'current_temperature') | float(0) }}"
+  target_temp: "{{ state_attr(thermostat, 'temperature') | float(0) }}"
+  outdoor_temp: "{{ state_attr(meteo_entity, 'temperature') | float(0) }}"
   temp_rising: "{{ is_state(temp_rising_entity, 'on') }}"
-  window_state: "{{ states[window_entity].state }}"
-  blind_state: "{{ states[blind_entity].state }}"
 
-  night_start_dt: "{{ today_at(inputs.night_start) }}"
-  night_end_dt: "{{ today_at(inputs.night_end) }}"
+  blind_state: "{{ states(blind) }}"
+  window_state: "{{ states(window) }}"
+
+  # Délai d'attente pour fermeture volet après fenêtre
+  wait_before_blind: 5
+
+  # Delta anti-flapping
+  temp_delta: 1
+
+  # Heures de nuit
+  night_start_time: !input night_start
+  night_end_time: !input night_end
+  night_start_dt: "{{ today_at(night_start_time) }}"
+  night_end_dt: "{{ today_at(night_end_time) }}"
   is_night: >
     {% if night_start_dt > night_end_dt %}
       {{ now() >= night_start_dt or now() < night_end_dt }}
@@ -79,54 +77,72 @@ variables:
     {% endif %}
 
   should_close_blind: >
-    {{ (is_night or (current_temp > max_temp and temp_rising)) and blind_state != 'closed' }}
+    {{ (is_night or (current_temp > target_temp and temp_rising))
+       and blind_state != 'closed' }}
+
   should_open_blind: >
-    {{ not is_night and not (current_temp > max_temp and temp_rising) and blind_state != 'open' }}
+    {{ not is_night and not (current_temp > target_temp and temp_rising)
+       and blind_state != 'open' }}
+
   should_open_window: >
-    {{ current_temp > max_temp and outdoor_temp < current_temp and window_state != 'open' }}
+    {{ current_temp > (target_temp + temp_delta)
+       and outdoor_temp < current_temp
+       and window_state != 'open' }}
+
   should_close_window: >
-    {{ (current_temp <= min_temp or outdoor_temp >= current_temp) and window_state != 'closed' }}
+    {{ (current_temp <= (target_temp - temp_delta)
+       or outdoor_temp >= current_temp)
+       and window_state != 'closed' }}
 
 action:
   - choose:
+      # Volet : fermeture avec gestion de fenêtre
       - conditions: "{{ should_close_blind }}"
         sequence:
           - if:
               - condition: state
-                entity_id: !input window_entity
+                entity_id: "{{ window }}"
                 state: "open"
             then:
               - service: cover.close_cover
                 target:
-                  entity_id: !input window_entity
-              - delay: "00:00:05"
+                  entity_id: "{{ window }}"
+              - delay: "{{ wait_before_blind }}"
           - service: cover.close_cover
             target:
-              entity_id: !input blind_entity
+              entity_id: "{{ blind }}"
           - service: notify.mobile_app_iphone_de_tristan_2
             data:
-              message: "Fermeture du volet dans la pièce {{ state_attr(climate_entity, 'friendly_name') }}"
+              message: "Volet de la pièce '{{ window.split('.')[-1].replace('_', ' ') }}' fermé automatiquement."
+
+      # Volet : ouverture
       - conditions: "{{ should_open_blind }}"
         sequence:
           - service: cover.open_cover
             target:
-              entity_id: !input blind_entity
+              entity_id: "{{ blind }}"
           - service: notify.mobile_app_iphone_de_tristan_2
             data:
-              message: "Ouverture du volet dans la pièce {{ state_attr(climate_entity, 'friendly_name') }}"
-      - conditions: "{{ should_close_window }}"
-        sequence:
-          - service: cover.close_cover
-            target:
-              entity_id: !input window_entity
-          - service: notify.mobile_app_iphone_de_tristan_2
-            data:
-              message: "Fermeture de la fenêtre dans la pièce {{ state_attr(climate_entity, 'friendly_name') }}"
+              message: "Volet de la pièce '{{ window.split('.')[-1].replace('_', ' ') }}' ouvert automatiquement."
+
+      # Fenêtre : ouverture
       - conditions: "{{ should_open_window }}"
         sequence:
           - service: cover.open_cover
             target:
-              entity_id: !input window_entity
+              entity_id: "{{ window }}"
           - service: notify.mobile_app_iphone_de_tristan_2
             data:
-              message: "Ouverture de la fenêtre dans la pièce {{ state_attr(climate_entity, 'friendly_name') }}"
+              message: "Fenêtre de la pièce '{{ window.split('.')[-1].replace('_', ' ') }}' ouverte automatiquement."
+
+      # Fenêtre : fermeture
+      - conditions: "{{ should_close_window }}"
+        sequence:
+          - service: cover.close_cover
+            target:
+              entity_id: "{{ window }}"
+          - service: notify.mobile_app_iphone_de_tristan_2
+            data:
+              message: "Fenêtre de la pièce '{{ window.split('.')[-1].replace('_', ' ') }}' fermée automatiquement."
+
+mode: single
