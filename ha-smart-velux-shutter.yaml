@@ -81,7 +81,7 @@ variables:
   temp_rising: "{{ is_state(temp_rising_entity, 'on') }}"
   window_state: "{{ states[window].state }}"
   blind_state: "{{ states[blind].state }}"
-  is_heating: "{{ state_attr(thermostat, 'hvac_action') == 'heating' }}"
+  is_cooling: "{{ state_attr(thermostat, 'hvac_action') == 'cooling' }}"
 
   is_night: >
     {% set t1 = night_start.split(':') %}
@@ -95,16 +95,16 @@ variables:
     {% endif %}
 
   should_close_blind: >
-    {{ not is_heating and (is_night or (current_temp > target_temp and temp_rising)) and blind_state != 'closed' }}
+    {{ is_cooling and (is_night or (current_temp > target_temp and temp_rising)) and blind_state != 'closed' }}
 
   should_open_blind: >
-    {{ not is_heating and not is_night and (current_temp <= (target_temp - delta) or not temp_rising) and blind_state != 'open' }}
+    {{ is_cooling and not is_night and (current_temp <= (target_temp - delta) or not temp_rising) and blind_state != 'open' }}
 
   should_open_window: >
-    {{ not is_heating and current_temp > (target_temp + delta) and outdoor_temp < current_temp and window_state != 'open' }}
+    {{ is_cooling and current_temp > (target_temp + delta) and outdoor_temp < current_temp and window_state != 'open' }}
 
   should_close_window: >
-    {{ not is_heating and (current_temp < (target_temp - delta) or outdoor_temp >= current_temp) and window_state != 'closed' }}
+    {{ is_cooling and (current_temp < (target_temp - delta) or outdoor_temp >= current_temp) and window_state != 'closed' }}
 
 action:
   - choose:
