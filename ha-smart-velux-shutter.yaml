@@ -63,7 +63,7 @@ mode: single
 
 trigger:
   - platform: time_pattern
-    minutes: "/15"
+    minutes: "/30"
 
 variables:
   window: !input velux_window
