@@ -123,6 +123,8 @@ trigger:
     entity_id: !input outdoor_temp_sensor
     for:
       minutes: 5
+  - platform: state
+    entity_id: sun.sun
 
 variables:
   window: !input velux_window
@@ -148,6 +150,7 @@ variables:
   window_state: "{{ states(window) }}"
   blind_state: "{{ states(blind) }}"
   is_heating: "{{ state_attr(thermostat, 'hvac_action') == 'heating' }}"
+  is_night: "{{ is_state('sun.sun', 'below_horizon') }}"
   window_position: >
     {% set position = state_attr(window, 'current_position') %}
     {% if position is not none %}
@@ -177,11 +180,11 @@ variables:
   desired_window_position: >
     {% set safe_min = safe_min_position | int(7) %}
     {% set target = safe_min %}
-    {% if valid_temperatures and not is_heating and outdoor_good_for_cooling %}
+    {% if valid_temperatures and not is_heating and not is_night and outdoor_good_for_cooling %}
       {% if above_target %}
         {% set target = 100 %}
       {% endif %}
-    {% elif valid_temperatures and not is_heating and outdoor_cooler %}
+    {% elif valid_temperatures and not is_heating and not is_night and outdoor_cooler %}
       {% set target = window_position | int(safe_min) %}
     {% endif %}
     {{ [[target, safe_min] | max, 100] | min }}

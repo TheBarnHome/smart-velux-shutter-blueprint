@@ -9,7 +9,7 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 - **Fermeture automatique** du volet lorsque la pièce chauffe sans possibilité de ventilation efficace.
 - **Position cible progressive** pour éviter les cycles complet ouvert/fermé liés à l'inertie thermique.
 - **Anticipation optionnelle** de la tendance extérieure pour ouvrir plus prudemment si dehors chauffe, ou plus facilement si dehors refroidit.
-- **Ouverture minimale de sécurité** pour éviter de descendre sous 7% et déclencher le verrouillage du Velux.
+- **Ouverture minimale de sécurité** la nuit selon `sun.sun` pour éviter de descendre sous 7% et déclencher le verrouillage du Velux.
 - Déclenchement toutes les 10 minutes et aux changements des capteurs principaux.
 
 ## Entrées à renseigner
@@ -30,16 +30,17 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 
 - Toutes les 10 minutes
 - À chaque changement stable pendant 5 minutes du thermostat, du capteur extérieur ou du booléen de température intérieure en hausse
+- Aux changements de `sun.sun` pour appliquer la position de sécurité de nuit
 
 ## Logique principale
 
 1. Le blueprint calcule d'abord une position cible de fenêtre au lieu de décider simplement ouvrir ou fermer.
-2. En chauffage, ou quand l'extérieur est au moins aussi chaud que l'intérieur, la cible est l'ouverture minimale de sécurité, 7% par défaut.
+2. La nuit selon `sun.sun`, en chauffage, ou quand l'extérieur est au moins aussi chaud que l'intérieur, la cible est l'ouverture minimale de sécurité, 7% par défaut.
 3. Si la pièce est au-dessus de la consigne et que l'extérieur est nettement plus frais, la cible passe à 100% pour rafraîchir le plus vite possible.
 4. Si l'extérieur est plus frais que l'intérieur mais pas assez pour justifier une ouverture plus grande, la fenêtre garde sa position au lieu de se refermer.
 5. En forte demande de rafraîchissement, la fenêtre va directement à la cible. Près de la consigne, elle rouvre et ferme par pas configurables, 10% par défaut.
 6. Si la tendance extérieure est renseignée, l'écart nécessaire pour ouvrir davantage augmente quand dehors chauffe et diminue quand dehors refroidit.
-7. Le volet se ferme quand la pièce chauffe sans possibilité de ventilation efficace, et se rouvre seulement si la pièce n'est plus en surchauffe et que l'extérieur n'est pas au-dessus de la zone de consigne.
+7. Le volet se ferme quand la pièce chauffe sans possibilité de ventilation efficace, et se rouvre seulement si la pièce n'est plus en surchauffe et que l'extérieur n'est pas au-dessus de la zone de consigne. La nuit ne ferme plus le volet.
 
 ---
 
