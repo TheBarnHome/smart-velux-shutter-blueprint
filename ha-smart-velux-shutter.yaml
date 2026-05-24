@@ -203,7 +203,7 @@ variables:
     {% set target = safe_min %}
     {% if valid_temperatures and not is_heating and not is_night and outdoor_cooler %}
       {% if current_temp >= target_temp + (2 * (delta | float(1))) %}
-        {% set target = 80 %}
+        {% set target = 100 %}
       {% elif hot_inside %}
         {% set target = 50 %}
       {% elif warming_above_target %}
