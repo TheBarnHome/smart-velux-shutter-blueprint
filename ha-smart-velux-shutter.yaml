@@ -2,7 +2,8 @@ blueprint:
   name: Gestion Velux et Volet Automatique
   description: >
     Gère automatiquement l'ouverture et la fermeture d'une fenêtre de toit Velux et de son volet
-    selon la température intérieure/extérieure, la consigne de thermostat, la nuit, et la tendance.
+    selon la température intérieure, un vrai capteur de température extérieure, la consigne de
+    thermostat, la nuit, et la tendance de température intérieure.
   domain: automation
   input:
     velux_window:
@@ -25,11 +26,13 @@ blueprint:
       selector:
         entity:
           domain: binary_sensor
-    weather:
-      name: Entité météo (Météo-France)
+    outdoor_temp_sensor:
+      name: Température extérieure réelle
+      description: Capteur de température placé à l'extérieur, utilisé à la place de la météo.
       selector:
         entity:
-          domain: weather
+          domain: sensor
+          device_class: temperature
     night_start:
       name: Heure de début de nuit
       selector:
@@ -58,29 +61,53 @@ blueprint:
           step: 0.1
           unit_of_measurement: "°C"
           mode: slider
+    outdoor_cooling_delta:
+      name: Ecart minimum intérieur / extérieur pour ventiler (°C)
+      description: La fenêtre ne s'ouvre que si l'extérieur est au moins autant plus frais que l'intérieur.
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 5
+          step: 0.1
+          unit_of_measurement: "°C"
+          mode: slider
 
 mode: single
+max_exceeded: silent
 
 trigger:
   - platform: time_pattern
-    minutes: "/30"
+    minutes: "/10"
+  - platform: state
+    entity_id: !input thermostat
+  - platform: state
+    entity_id: !input indoor_temp_rising
+  - platform: state
+    entity_id: !input outdoor_temp_sensor
+  - platform: time
+    at: !input night_start
+  - platform: time
+    at: !input night_end
 
 variables:
   window: !input velux_window
   blind: !input velux_blind
   thermostat: !input thermostat
   temp_rising_entity: !input indoor_temp_rising
-  weather: !input weather
+  outdoor_sensor: !input outdoor_temp_sensor
   night_start: !input night_start
   night_end: !input night_end
   action_delay: !input action_delay
   delta: !input delta_temperature
-  current_temp: "{{ state_attr(thermostat, 'current_temperature') | float }}"
-  target_temp: "{{ state_attr(thermostat, 'temperature') | float }}"
-  outdoor_temp: "{{ state_attr(weather, 'temperature') | float }}"
+  outdoor_delta: !input outdoor_cooling_delta
+  current_temp: "{{ state_attr(thermostat, 'current_temperature') | float(none) }}"
+  target_temp: "{{ state_attr(thermostat, 'temperature') | float(none) }}"
+  outdoor_temp: "{{ states(outdoor_sensor) | float(none) }}"
+  valid_temperatures: "{{ current_temp is not none and target_temp is not none and outdoor_temp is not none }}"
   temp_rising: "{{ is_state(temp_rising_entity, 'on') }}"
-  window_state: "{{ states[window].state }}"
-  blind_state: "{{ states[blind].state }}"
+  window_state: "{{ states(window) }}"
+  blind_state: "{{ states(blind) }}"
   is_heating: "{{ state_attr(thermostat, 'hvac_action') == 'heating' }}"
 
   is_night: >
@@ -94,17 +121,39 @@ variables:
       {{ now() >= ns and now() < ne }}
     {% endif %}
 
+  hot_inside: "{{ valid_temperatures and current_temp > (target_temp + delta) }}"
+  cool_inside: "{{ valid_temperatures and current_temp <= (target_temp - delta) }}"
+  outdoor_cooler: "{{ valid_temperatures and outdoor_temp <= (current_temp - outdoor_delta) }}"
+  outdoor_too_warm: "{{ valid_temperatures and outdoor_temp >= current_temp }}"
+  hot_outside_for_shading: "{{ valid_temperatures and outdoor_temp >= (target_temp + delta) }}"
+  should_ventilate: "{{ not is_heating and hot_inside and outdoor_cooler }}"
+
   should_close_blind: >
-    {{ not is_heating and (is_night or (current_temp > target_temp and temp_rising)) and blind_state != 'closed' }}
+    {{ valid_temperatures
+       and not is_heating
+       and blind_state != 'closed'
+       and (
+         is_night
+         or (hot_inside and temp_rising and not outdoor_cooler)
+         or (hot_outside_for_shading and current_temp >= target_temp)
+       ) }}
 
   should_open_blind: >
-    {{ not is_heating and not is_night and (current_temp <= (target_temp - delta) or not temp_rising) and blind_state != 'open' }}
+    {{ valid_temperatures
+       and not is_heating
+       and not is_night
+       and not hot_inside
+       and not hot_outside_for_shading
+       and blind_state != 'open' }}
 
   should_open_window: >
-    {{ not is_heating and current_temp > (target_temp + delta) and outdoor_temp < current_temp and window_state != 'open' }}
+    {{ should_ventilate and window_state != 'open' }}
 
   should_close_window: >
-    {{ not is_heating and (current_temp < (target_temp - delta) or outdoor_temp >= current_temp) and window_state != 'closed' }}
+    {{ valid_temperatures
+       and not is_heating
+       and (cool_inside or outdoor_too_warm)
+       and window_state != 'closed' }}
 
 action:
   - choose:
@@ -130,7 +179,7 @@ action:
           # Rouvrir la fenêtre si elle devait rester ouverte
           - if:
               - condition: template
-                value_template: "{{ should_open_window }}"
+                value_template: "{{ should_ventilate }}"
             then:
               - delay:
                   seconds: "{{ action_delay }}"
