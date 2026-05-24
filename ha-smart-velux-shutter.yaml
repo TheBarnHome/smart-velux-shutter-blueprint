@@ -80,8 +80,8 @@ blueprint:
           unit_of_measurement: "°C"
           mode: slider
     window_position_step:
-      name: Pas d'ajustement de la fenêtre (%)
-      description: Pour éviter les cycles complet ouvert/fermé, la fenêtre bouge de ce pourcentage à chaque correction.
+      name: Pas de fermeture progressive de la fenêtre (%)
+      description: La fermeture se fait par ce pourcentage à chaque correction. L'ouverture va directement à la position cible.
       default: 10
       selector:
         number:
@@ -215,7 +215,7 @@ variables:
     {% set target = desired_window_position | int(7) %}
     {% set step = window_step | int(10) %}
     {% if target > current %}
-      {{ [current + step, target] | min }}
+      {{ target }}
     {% elif target < current %}
       {{ [current - step, target] | max }}
     {% else %}
