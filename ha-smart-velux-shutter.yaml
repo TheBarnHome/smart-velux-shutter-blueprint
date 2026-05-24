@@ -186,8 +186,6 @@ variables:
 
   hot_inside: "{{ valid_temperatures and current_temp > (target_temp + delta) }}"
   above_target: "{{ valid_temperatures and current_temp > target_temp }}"
-  warm_inside: "{{ valid_temperatures and current_temp > (target_temp + ((delta | float(1)) / 2)) }}"
-  warming_above_target: "{{ warm_inside and temp_rising }}"
   effective_outdoor_delta: >
     {% set base = outdoor_delta | float(1) %}
     {% if outdoor_rising %}
@@ -204,14 +202,8 @@ variables:
     {% set safe_min = safe_min_position | int(7) %}
     {% set target = safe_min %}
     {% if valid_temperatures and not is_heating and not is_night and outdoor_good_for_cooling %}
-      {% if current_temp >= target_temp + (2 * (delta | float(1))) %}
+      {% if above_target %}
         {% set target = 100 %}
-      {% elif hot_inside %}
-        {% set target = 50 %}
-      {% elif warming_above_target or above_target %}
-        {% set target = 30 %}
-      {% elif outdoor_falling and warm_inside %}
-        {% set target = 20 %}
       {% endif %}
     {% elif valid_temperatures and not is_heating and not is_night and outdoor_cooler %}
       {% set target = window_position | int(safe_min) %}
