@@ -2,8 +2,8 @@ blueprint:
   name: Gestion Velux et Volet Automatique
   description: >
     Gère automatiquement l'ouverture et la fermeture d'une fenêtre de toit Velux et de son volet
-    selon la température intérieure, un vrai capteur de température extérieure, la consigne de
-    thermostat, et la tendance de température intérieure.
+    selon la température intérieure, un vrai capteur de température extérieure, et la consigne de
+    thermostat.
   domain: automation
   input:
     velux_window:
@@ -21,11 +21,6 @@ blueprint:
       selector:
         entity:
           domain: climate
-    indoor_temp_rising:
-      name: Température intérieure en hausse (booléen)
-      selector:
-        entity:
-          domain: binary_sensor
     outdoor_temp_sensor:
       name: Température extérieure réelle
       description: Capteur de température placé à l'extérieur, utilisé à la place de la météo.
@@ -33,13 +28,6 @@ blueprint:
         entity:
           domain: sensor
           device_class: temperature
-    outdoor_temp_rising:
-      name: Température extérieure en hausse (optionnel, diagnostic)
-      description: Conservé pour observation dans les traces, mais n'influence plus les décisions.
-      default: ""
-      selector:
-        entity:
-          domain: binary_sensor
     action_delay:
       name: Délai entre deux actions (en secondes)
       default: 5
@@ -122,10 +110,6 @@ trigger:
     for:
       minutes: 5
   - platform: state
-    entity_id: !input indoor_temp_rising
-    for:
-      minutes: 5
-  - platform: state
     entity_id: !input outdoor_temp_sensor
     for:
       minutes: 5
@@ -136,9 +120,7 @@ variables:
   window: !input velux_window
   blind: !input velux_blind
   thermostat: !input thermostat
-  temp_rising_entity: !input indoor_temp_rising
   outdoor_sensor: !input outdoor_temp_sensor
-  outdoor_rising_entity: !input outdoor_temp_rising
   action_delay: !input action_delay
   delta: !input delta_temperature
   outdoor_delta: !input outdoor_cooling_delta
@@ -150,10 +132,6 @@ variables:
   target_temp: "{{ state_attr(thermostat, 'temperature') | float(none) }}"
   outdoor_temp: "{{ states(outdoor_sensor) | float(none) }}"
   valid_temperatures: "{{ current_temp is not none and target_temp is not none and outdoor_temp is not none }}"
-  temp_rising: "{{ is_state(temp_rising_entity, 'on') }}"
-  has_outdoor_trend: "{{ outdoor_rising_entity not in [none, ''] }}"
-  outdoor_rising: "{{ has_outdoor_trend and is_state(outdoor_rising_entity, 'on') }}"
-  outdoor_falling: "{{ has_outdoor_trend and is_state(outdoor_rising_entity, 'off') }}"
   window_state: "{{ states(window) }}"
   blind_state: "{{ states(blind) }}"
   is_heating: "{{ state_attr(thermostat, 'hvac_action') == 'heating' }}"
@@ -216,7 +194,7 @@ variables:
        and not is_heating
        and blind_state != 'closed'
        and (
-         (hot_inside and temp_rising and not outdoor_cooler)
+         (hot_inside and not outdoor_cooler)
          or (hot_outside_for_shading and current_temp >= target_temp)
        ) }}
 
@@ -253,9 +231,6 @@ action:
             safe_min={{ safe_min_position }}%;
             night={{ is_night }};
             heating={{ is_heating }};
-            temp_rising={{ temp_rising }};
-            outdoor_rising={{ outdoor_rising }};
-            outdoor_falling={{ outdoor_falling }};
             outdoor_cooler={{ outdoor_cooler }};
             outdoor_good_for_cooling={{ outdoor_good_for_cooling }};
             hot_inside={{ hot_inside }};

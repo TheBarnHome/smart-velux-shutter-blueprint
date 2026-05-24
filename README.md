@@ -1,6 +1,6 @@
 # Gestion intelligente Velux et Volet
 
-Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la fermeture d'une fenêtre Velux et de son volet roulant selon la température intérieure, une vraie température extérieure mesurée, la tendance intérieure et la consigne du thermostat.
+Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la fermeture d'une fenêtre Velux et de son volet roulant selon la température intérieure, une vraie température extérieure mesurée et la consigne du thermostat.
 
 ## Fonctionnalités
 
@@ -16,10 +16,8 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 
 - `thermostat` : L’entité `climate` représentant le thermostat de la pièce (pour récupérer température actuelle et consigne).
 - `outdoor_temp_sensor` : l’entité `sensor` de température extérieure réelle.
-- `outdoor_temp_rising` : entité binaire optionnelle indiquant si la température extérieure monte (`on`) ou baisse (`off`), conservée pour diagnostic mais non utilisée dans les décisions.
 - `velux` : L’entité `cover` correspondant à la fenêtre Velux.
 - `volet` : L’entité `cover` correspondant au volet roulant.
-- `temp_rising` : Entité binaire/sensor indiquant si la température intérieure est en train de monter (`on` ou `off`).
 - `delta_temperature` : marge autour de la consigne pour éviter les ouvertures/fermetures trop fréquentes.
 - `outdoor_cooling_delta` : écart minimum entre intérieur et extérieur avant d'ouvrir la fenêtre pour rafraîchir.
 - `window_position_step` : pourcentage d'ajustement progressif appliqué à la fermeture et aux petites réouvertures.
@@ -30,7 +28,7 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 ## Déclencheurs
 
 - Toutes les 10 minutes
-- À chaque changement stable pendant 5 minutes du thermostat, du capteur extérieur ou du booléen de température intérieure en hausse
+- À chaque changement stable pendant 5 minutes du thermostat ou du capteur extérieur
 - Aux changements de `sun.sun` pour appliquer la position de sécurité de nuit
 
 ## Logique principale
@@ -44,7 +42,7 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 
 ## Diagnostic
 
-Activez `debug_logging` dans l'automatisation pour ajouter une trace à chaque exécution dans le Logbook Home Assistant. Le message indique notamment les températures, la position actuelle de la fenêtre, la position cible calculée, la prochaine position demandée, les états de tendance et les décisions volet/fenêtre.
+Activez `debug_logging` dans l'automatisation pour ajouter une trace à chaque exécution dans le Logbook Home Assistant. Le message indique notamment les températures, la position actuelle de la fenêtre, la position cible calculée, la prochaine position demandée et les décisions volet/fenêtre.
 
 ---
 
