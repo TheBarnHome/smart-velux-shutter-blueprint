@@ -36,7 +36,7 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 ## Logique principale
 
 1. Le blueprint calcule d'abord une position cible de fenêtre au lieu de décider simplement ouvrir ou fermer.
-2. La nuit selon `sun.sun`, la cible minimale est l'ouverture de sécurité, 7% par défaut. En journée, la cible minimale est 0%, donc la fermeture complète reste possible.
+2. La nuit selon `sun.sun`, la cible minimale est l'ouverture de sécurité, 7% par défaut. En journée, la cible minimale est 0%, donc la fermeture complète reste possible. La nuit n'empêche pas le rafraîchissement si l'extérieur est plus frais.
 3. Si la pièce est au-dessus de la consigne et que l'extérieur est nettement plus frais, la cible passe à 100% pour rafraîchir le plus vite possible.
 4. Si l'extérieur est plus frais que l'intérieur mais pas assez pour justifier une ouverture plus grande, la fenêtre garde sa position au lieu de se refermer.
 5. En forte demande de rafraîchissement, la fenêtre va directement à la cible. Près de la consigne, elle rouvre et ferme par pas configurables, 10% par défaut.

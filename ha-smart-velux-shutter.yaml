@@ -184,11 +184,11 @@ variables:
   desired_window_position: >
     {% set safe_min = safe_min_position | int(7) %}
     {% set target = safe_min %}
-    {% if valid_temperatures and not is_heating and not is_night and outdoor_good_for_cooling %}
+    {% if valid_temperatures and not is_heating and outdoor_good_for_cooling %}
       {% if above_target %}
         {% set target = 100 %}
       {% endif %}
-    {% elif valid_temperatures and not is_heating and not is_night and outdoor_cooler %}
+    {% elif valid_temperatures and not is_heating and outdoor_cooler %}
       {% set target = window_position | int(safe_min) %}
     {% endif %}
     {{ [[target, safe_min] | max, 100] | min }}
