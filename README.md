@@ -1,6 +1,6 @@
 # Gestion intelligente Velux et Volet
 
-Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la fermeture d'une fenêtre Velux et de son volet roulant selon la température intérieure, une vraie température extérieure mesurée, la tendance de la température intérieure, l'heure et la consigne du thermostat.
+Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la fermeture d'une fenêtre Velux et de son volet roulant selon la température intérieure, une vraie température extérieure mesurée, les tendances de température, l'heure et la consigne du thermostat.
 
 ## Fonctionnalités
 
@@ -8,12 +8,14 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 - **Fermeture progressive** de la fenêtre si la pièce est assez fraîche ou si l'extérieur devient plus chaud que l'intérieur.
 - **Fermeture automatique** du volet la nuit ou lorsque la pièce chauffe sans possibilité de ventilation efficace.
 - **Correction par petits pas** pour éviter les cycles complet ouvert/fermé liés à l'inertie thermique.
+- **Anticipation optionnelle** de la tendance extérieure pour ouvrir plus prudemment si dehors chauffe, ou plus facilement si dehors refroidit.
 - Déclenchement toutes les 10 minutes, aux changements des capteurs principaux et aux heures de début/fin de nuit.
 
 ## Entrées à renseigner
 
 - `thermostat` : L’entité `climate` représentant le thermostat de la pièce (pour récupérer température actuelle et consigne).
 - `outdoor_temp_sensor` : l’entité `sensor` de température extérieure réelle.
+- `outdoor_temp_rising` : entité binaire optionnelle indiquant si la température extérieure monte (`on`) ou baisse (`off`).
 - `velux` : L’entité `cover` correspondant à la fenêtre Velux.
 - `volet` : L’entité `cover` correspondant au volet roulant.
 - `night_start` : l’heure à partir de laquelle le volet doit se fermer.
@@ -33,9 +35,10 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 
 1. Si la pièce est franchement au-dessus de la consigne, ou au-dessus et en train de remonter, et que l'extérieur est suffisamment plus frais, la fenêtre s'ouvre d'un pas configurable, 10% par défaut.
 2. Si la consigne est atteinte, ou si l'extérieur devient aussi chaud/plus chaud que l'intérieur, la fenêtre se ferme d'un pas configurable.
-3. Si c'est la nuit, le volet se ferme. La fenêtre est temporairement fermée si nécessaire pour laisser le volet descendre.
-4. Si la pièce chauffe et que l'extérieur n'est pas assez frais pour ventiler, le volet se ferme pour limiter l'apport de chaleur.
-5. En journée, le volet se rouvre seulement si la pièce n'est plus en surchauffe et que l'extérieur n'est pas au-dessus de la zone de consigne.
+3. Si la tendance extérieure est renseignée, l'écart nécessaire pour ventiler augmente quand dehors chauffe et diminue quand dehors refroidit.
+4. Si c'est la nuit, le volet se ferme. La fenêtre est temporairement fermée si nécessaire pour laisser le volet descendre.
+5. Si la pièce chauffe et que l'extérieur n'est pas assez frais pour ventiler, le volet se ferme pour limiter l'apport de chaleur.
+6. En journée, le volet se rouvre seulement si la pièce n'est plus en surchauffe et que l'extérieur n'est pas au-dessus de la zone de consigne.
 
 ---
 

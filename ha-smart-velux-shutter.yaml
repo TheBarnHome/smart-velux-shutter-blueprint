@@ -33,6 +33,13 @@ blueprint:
         entity:
           domain: sensor
           device_class: temperature
+    outdoor_temp_rising:
+      name: Température extérieure en hausse (optionnel)
+      description: Si renseigné, permet d'anticiper les hausses et baisses de température extérieure.
+      default: ""
+      selector:
+        entity:
+          domain: binary_sensor
     night_start:
       name: Heure de début de nuit
       selector:
@@ -113,6 +120,7 @@ variables:
   thermostat: !input thermostat
   temp_rising_entity: !input indoor_temp_rising
   outdoor_sensor: !input outdoor_temp_sensor
+  outdoor_rising_entity: !input outdoor_temp_rising
   night_start: !input night_start
   night_end: !input night_end
   action_delay: !input action_delay
@@ -124,6 +132,9 @@ variables:
   outdoor_temp: "{{ states(outdoor_sensor) | float(none) }}"
   valid_temperatures: "{{ current_temp is not none and target_temp is not none and outdoor_temp is not none }}"
   temp_rising: "{{ is_state(temp_rising_entity, 'on') }}"
+  has_outdoor_trend: "{{ outdoor_rising_entity not in [none, ''] }}"
+  outdoor_rising: "{{ has_outdoor_trend and is_state(outdoor_rising_entity, 'on') }}"
+  outdoor_falling: "{{ has_outdoor_trend and is_state(outdoor_rising_entity, 'off') }}"
   window_state: "{{ states(window) }}"
   blind_state: "{{ states(blind) }}"
   is_heating: "{{ state_attr(thermostat, 'hvac_action') == 'heating' }}"
@@ -157,10 +168,26 @@ variables:
   hot_inside: "{{ valid_temperatures and current_temp > (target_temp + delta) }}"
   target_reached: "{{ valid_temperatures and current_temp <= target_temp }}"
   warming_above_target: "{{ valid_temperatures and current_temp > target_temp and temp_rising }}"
-  outdoor_cooler: "{{ valid_temperatures and outdoor_temp <= (current_temp - outdoor_delta) }}"
+  effective_outdoor_delta: >
+    {% set base = outdoor_delta | float(1) %}
+    {% if outdoor_rising %}
+      {{ base + 0.5 }}
+    {% elif outdoor_falling %}
+      {{ [base - 0.5, 0] | max }}
+    {% else %}
+      {{ base }}
+    {% endif %}
+  outdoor_cooler: "{{ valid_temperatures and outdoor_temp <= (current_temp - (effective_outdoor_delta | float(1))) }}"
   outdoor_too_warm: "{{ valid_temperatures and outdoor_temp >= current_temp }}"
   hot_outside_for_shading: "{{ valid_temperatures and outdoor_temp >= (target_temp + delta) }}"
-  should_ventilate: "{{ not is_heating and (hot_inside or warming_above_target) and outdoor_cooler }}"
+  should_ventilate: >
+    {{ not is_heating
+       and outdoor_cooler
+       and (
+         hot_inside
+         or warming_above_target
+         or (outdoor_falling and current_temp > target_temp)
+       ) }}
 
   should_close_blind: >
     {{ valid_temperatures
@@ -186,7 +213,7 @@ variables:
   should_close_window: >
     {{ valid_temperatures
        and not is_heating
-       and (target_reached or outdoor_too_warm)
+       and (target_reached or outdoor_too_warm or (outdoor_rising and not outdoor_cooler))
        and (window_position | int(0)) > 0 }}
 
 action:
