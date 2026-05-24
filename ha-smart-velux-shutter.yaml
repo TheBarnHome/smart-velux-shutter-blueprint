@@ -104,6 +104,12 @@ blueprint:
           step: 1
           unit_of_measurement: "%"
           mode: slider
+    debug_logging:
+      name: Activer les traces dans le journal
+      description: Ajoute un message détaillé dans le Logbook à chaque exécution.
+      default: false
+      selector:
+        boolean: {}
 
 mode: single
 max_exceeded: silent
@@ -139,6 +145,7 @@ variables:
   window_step: !input window_position_step
   min_window_position: !input min_window_position
   window_tolerance: !input window_position_tolerance
+  debug_logging: !input debug_logging
   current_temp: "{{ state_attr(thermostat, 'current_temperature') | float(none) }}"
   target_temp: "{{ state_attr(thermostat, 'temperature') | float(none) }}"
   outdoor_temp: "{{ states(outdoor_sensor) | float(none) }}"
@@ -235,6 +242,38 @@ variables:
     {{ should_adjust_window and (window_position_gap | int(0)) < 0 }}
 
 action:
+  - if:
+      - condition: template
+        value_template: "{{ debug_logging }}"
+    then:
+      - service: logbook.log
+        data:
+          name: Smart Velux Shutter
+          entity_id: "{{ window }}"
+          message: >-
+            trigger={{ trigger.platform if trigger is defined else 'manual' }};
+            current={{ current_temp }}°C;
+            target={{ target_temp }}°C;
+            outdoor={{ outdoor_temp }}°C;
+            window={{ window_position }}%;
+            desired={{ desired_window_position }}%;
+            next={{ next_window_position }}%;
+            safe_min={{ safe_min_position }}%;
+            night={{ is_night }};
+            heating={{ is_heating }};
+            temp_rising={{ temp_rising }};
+            outdoor_rising={{ outdoor_rising }};
+            outdoor_falling={{ outdoor_falling }};
+            outdoor_cooler={{ outdoor_cooler }};
+            outdoor_good_for_cooling={{ outdoor_good_for_cooling }};
+            hot_inside={{ hot_inside }};
+            above_target={{ above_target }};
+            strong_cooling_needed={{ strong_cooling_needed }};
+            close_blind={{ should_close_blind }};
+            open_blind={{ should_open_blind }};
+            open_window={{ should_open_window }};
+            close_window={{ should_close_window }}.
+
   - choose:
       # --- Si le volet doit être fermé ---
       - conditions:
