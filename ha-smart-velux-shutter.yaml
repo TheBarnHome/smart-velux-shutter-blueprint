@@ -196,12 +196,13 @@ variables:
     {% else %}
       {{ base }}
     {% endif %}
-  outdoor_cooler: "{{ valid_temperatures and outdoor_temp <= (current_temp - (effective_outdoor_delta | float(1))) }}"
+  outdoor_cooler: "{{ valid_temperatures and outdoor_temp < current_temp }}"
+  outdoor_good_for_cooling: "{{ valid_temperatures and outdoor_temp <= (current_temp - (effective_outdoor_delta | float(1))) }}"
   hot_outside_for_shading: "{{ valid_temperatures and outdoor_temp >= (target_temp + delta) }}"
   desired_window_position: >
     {% set safe_min = safe_min_position | int(7) %}
     {% set target = safe_min %}
-    {% if valid_temperatures and not is_heating and not is_night and outdoor_cooler %}
+    {% if valid_temperatures and not is_heating and not is_night and outdoor_good_for_cooling %}
       {% if current_temp >= target_temp + (2 * (delta | float(1))) %}
         {% set target = 100 %}
       {% elif hot_inside %}
@@ -211,6 +212,8 @@ variables:
       {% elif outdoor_falling and warm_inside %}
         {% set target = 20 %}
       {% endif %}
+    {% elif valid_temperatures and not is_heating and not is_night and outdoor_cooler %}
+      {% set target = window_position | int(safe_min) %}
     {% endif %}
     {{ [[target, safe_min] | max, 100] | min }}
   window_position_gap: "{{ (desired_window_position | int(0)) - (window_position | int(0)) }}"
