@@ -24,7 +24,7 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 - `temp_rising` : Entité binaire/sensor indiquant si la température intérieure est en train de monter (`on` ou `off`).
 - `delta_temperature` : marge autour de la consigne pour éviter les ouvertures/fermetures trop fréquentes.
 - `outdoor_cooling_delta` : écart minimum entre intérieur et extérieur avant d'ouvrir la fenêtre pour rafraîchir.
-- `window_position_step` : pourcentage de fermeture appliqué à chaque correction de la fenêtre.
+- `window_position_step` : pourcentage d'ajustement progressif appliqué à la fermeture et aux petites réouvertures.
 - `min_window_position` : ouverture minimale conservée pour éviter le verrouillage, 7% par défaut.
 - `window_position_tolerance` : écart ignoré entre la position actuelle et la position cible, 3% par défaut.
 
@@ -40,7 +40,7 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 2. La nuit, en chauffage, ou quand l'extérieur est au moins aussi chaud que l'intérieur, la cible est l'ouverture minimale de sécurité, 7% par défaut.
 3. Si la pièce est au-dessus de la consigne et que l'extérieur est nettement plus frais, la cible passe à 100% pour rafraîchir le plus vite possible.
 4. Si l'extérieur est plus frais que l'intérieur mais pas assez pour justifier une ouverture plus grande, la fenêtre garde sa position au lieu de se refermer.
-5. À l'ouverture, la fenêtre va directement à la cible pour rafraîchir vite. À la fermeture, elle descend par pas configurables, 10% par défaut.
+5. En forte demande de rafraîchissement, la fenêtre va directement à la cible. Près de la consigne, elle rouvre et ferme par pas configurables, 10% par défaut.
 6. Si la tendance extérieure est renseignée, l'écart nécessaire pour ouvrir davantage augmente quand dehors chauffe et diminue quand dehors refroidit.
 7. Si c'est la nuit, le volet se ferme. La fenêtre est ramenée à l'ouverture minimale de sécurité avant la fermeture du volet.
 8. En journée, le volet se rouvre seulement si la pièce n'est plus en surchauffe et que l'extérieur n'est pas au-dessus de la zone de consigne.

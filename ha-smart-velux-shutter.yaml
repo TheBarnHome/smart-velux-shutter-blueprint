@@ -80,8 +80,8 @@ blueprint:
           unit_of_measurement: "°C"
           mode: slider
     window_position_step:
-      name: Pas de fermeture progressive de la fenêtre (%)
-      description: La fermeture se fait par ce pourcentage à chaque correction. L'ouverture va directement à la position cible.
+      name: Pas d'ajustement progressif de la fenêtre (%)
+      description: Fermeture progressive et petite réouverture près de la consigne. L'ouverture forte va directement à la cible.
       default: 10
       selector:
         number:
@@ -186,6 +186,7 @@ variables:
 
   hot_inside: "{{ valid_temperatures and current_temp > (target_temp + delta) }}"
   above_target: "{{ valid_temperatures and current_temp > target_temp }}"
+  strong_cooling_needed: "{{ valid_temperatures and current_temp > (target_temp + ((delta | float(1)) / 2)) }}"
   effective_outdoor_delta: >
     {% set base = outdoor_delta | float(1) %}
     {% if outdoor_rising %}
@@ -215,7 +216,11 @@ variables:
     {% set target = desired_window_position | int(7) %}
     {% set step = window_step | int(10) %}
     {% if target > current %}
-      {{ target }}
+      {% if strong_cooling_needed %}
+        {{ target }}
+      {% else %}
+        {{ [current + step, target] | min }}
+      {% endif %}
     {% elif target < current %}
       {{ [current - step, target] | max }}
     {% else %}
