@@ -185,6 +185,7 @@ variables:
     {% endif %}
 
   hot_inside: "{{ valid_temperatures and current_temp > (target_temp + delta) }}"
+  above_target: "{{ valid_temperatures and current_temp > target_temp }}"
   warm_inside: "{{ valid_temperatures and current_temp > (target_temp + ((delta | float(1)) / 2)) }}"
   warming_above_target: "{{ warm_inside and temp_rising }}"
   effective_outdoor_delta: >
@@ -207,7 +208,7 @@ variables:
         {% set target = 100 %}
       {% elif hot_inside %}
         {% set target = 50 %}
-      {% elif warming_above_target %}
+      {% elif warming_above_target or above_target %}
         {% set target = 30 %}
       {% elif outdoor_falling and warm_inside %}
         {% set target = 20 %}

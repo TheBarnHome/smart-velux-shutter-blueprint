@@ -38,7 +38,7 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 
 1. Le blueprint calcule d'abord une position cible de fenêtre au lieu de décider simplement ouvrir ou fermer.
 2. La nuit, en chauffage, ou quand l'extérieur est au moins aussi chaud que l'intérieur, la cible est l'ouverture minimale de sécurité, 7% par défaut.
-3. Si la pièce chauffe et que l'extérieur est nettement plus frais, la cible monte par paliers : environ 30%, 50%, puis 100% selon l'écart à la consigne.
+3. Si la pièce est au-dessus de la consigne et que l'extérieur est nettement plus frais, la cible monte par paliers : environ 30%, 50%, puis 100% selon l'écart à la consigne.
 4. Si l'extérieur est plus frais que l'intérieur mais pas assez pour justifier une ouverture plus grande, la fenêtre garde sa position au lieu de se refermer.
 5. La fenêtre ne bouge que d'un pas configurable vers cette cible, 10% par défaut, et ignore les écarts inférieurs à la tolérance.
 6. Si la tendance extérieure est renseignée, l'écart nécessaire pour ouvrir davantage augmente quand dehors chauffe et diminue quand dehors refroidit.
