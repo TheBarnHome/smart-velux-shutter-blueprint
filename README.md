@@ -7,8 +7,9 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 - **Ouverture progressive** de la fenêtre Velux si la pièce est trop chaude et que l'extérieur est réellement plus frais.
 - **Fermeture progressive** de la fenêtre si la pièce est assez fraîche ou si l'extérieur devient plus chaud que l'intérieur.
 - **Fermeture automatique** du volet la nuit ou lorsque la pièce chauffe sans possibilité de ventilation efficace.
-- **Correction par petits pas** pour éviter les cycles complet ouvert/fermé liés à l'inertie thermique.
+- **Position cible progressive** pour éviter les cycles complet ouvert/fermé liés à l'inertie thermique.
 - **Anticipation optionnelle** de la tendance extérieure pour ouvrir plus prudemment si dehors chauffe, ou plus facilement si dehors refroidit.
+- **Ouverture minimale de sécurité** pour éviter de descendre sous 7% et déclencher le verrouillage du Velux.
 - Déclenchement toutes les 10 minutes, aux changements des capteurs principaux et aux heures de début/fin de nuit.
 
 ## Entrées à renseigner
@@ -24,6 +25,8 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 - `delta_temperature` : marge autour de la consigne pour éviter les ouvertures/fermetures trop fréquentes.
 - `outdoor_cooling_delta` : écart minimum entre intérieur et extérieur avant d'ouvrir la fenêtre pour rafraîchir.
 - `window_position_step` : pourcentage d'ouverture/fermeture appliqué à chaque correction de la fenêtre.
+- `min_window_position` : ouverture minimale conservée pour éviter le verrouillage, 7% par défaut.
+- `window_position_tolerance` : écart ignoré entre la position actuelle et la position cible, 3% par défaut.
 
 ## Déclencheurs
 
@@ -33,12 +36,13 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 
 ## Logique principale
 
-1. Si la pièce est franchement au-dessus de la consigne, ou au-dessus et en train de remonter, et que l'extérieur est suffisamment plus frais, la fenêtre s'ouvre d'un pas configurable, 10% par défaut.
-2. Si la consigne est atteinte, ou si l'extérieur devient aussi chaud/plus chaud que l'intérieur, la fenêtre se ferme d'un pas configurable.
-3. Si la tendance extérieure est renseignée, l'écart nécessaire pour ventiler augmente quand dehors chauffe et diminue quand dehors refroidit.
-4. Si c'est la nuit, le volet se ferme. La fenêtre est temporairement fermée si nécessaire pour laisser le volet descendre.
-5. Si la pièce chauffe et que l'extérieur n'est pas assez frais pour ventiler, le volet se ferme pour limiter l'apport de chaleur.
-6. En journée, le volet se rouvre seulement si la pièce n'est plus en surchauffe et que l'extérieur n'est pas au-dessus de la zone de consigne.
+1. Le blueprint calcule d'abord une position cible de fenêtre au lieu de décider simplement ouvrir ou fermer.
+2. La nuit, en chauffage, ou quand l'extérieur n'est pas utile pour rafraîchir, la cible est l'ouverture minimale de sécurité, 7% par défaut.
+3. Si la pièce chauffe et que l'extérieur est plus frais, la cible monte par paliers : environ 30%, 50%, puis 80% selon l'écart à la consigne.
+4. La fenêtre ne bouge que d'un pas configurable vers cette cible, 10% par défaut, et ignore les écarts inférieurs à la tolérance.
+5. Si la tendance extérieure est renseignée, l'écart nécessaire pour ventiler augmente quand dehors chauffe et diminue quand dehors refroidit.
+6. Si c'est la nuit, le volet se ferme. La fenêtre est ramenée à l'ouverture minimale de sécurité avant la fermeture du volet.
+7. En journée, le volet se rouvre seulement si la pièce n'est plus en surchauffe et que l'extérieur n'est pas au-dessus de la zone de consigne.
 
 ---
 

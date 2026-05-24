@@ -90,6 +90,28 @@ blueprint:
           step: 5
           unit_of_measurement: "%"
           mode: slider
+    min_window_position:
+      name: Ouverture minimale de sécurité de la fenêtre (%)
+      description: La fenêtre ne descend jamais sous cette position pour éviter le verrouillage et le bruit.
+      default: 7
+      selector:
+        number:
+          min: 7
+          max: 20
+          step: 1
+          unit_of_measurement: "%"
+          mode: slider
+    window_position_tolerance:
+      name: Tolérance avant mouvement de la fenêtre (%)
+      description: Ignore les petites différences entre la position actuelle et la position cible.
+      default: 3
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 1
+          unit_of_measurement: "%"
+          mode: slider
 
 mode: single
 max_exceeded: silent
@@ -127,6 +149,8 @@ variables:
   delta: !input delta_temperature
   outdoor_delta: !input outdoor_cooling_delta
   window_step: !input window_position_step
+  min_window_position: !input min_window_position
+  window_tolerance: !input window_position_tolerance
   current_temp: "{{ state_attr(thermostat, 'current_temperature') | float(none) }}"
   target_temp: "{{ state_attr(thermostat, 'temperature') | float(none) }}"
   outdoor_temp: "{{ states(outdoor_sensor) | float(none) }}"
@@ -147,12 +171,7 @@ variables:
     {% else %}
       0
     {% endif %}
-  next_open_position: >
-    {% set next = (window_position | int(0)) + (window_step | int(10)) %}
-    {{ [next, 100] | min }}
-  next_close_position: >
-    {% set next = (window_position | int(0)) - (window_step | int(10)) %}
-    {{ [next, 0] | max }}
+  safe_min_position: "{{ [min_window_position | int(7), 7] | max }}"
 
   is_night: >
     {% set t1 = night_start.split(':') %}
@@ -166,8 +185,8 @@ variables:
     {% endif %}
 
   hot_inside: "{{ valid_temperatures and current_temp > (target_temp + delta) }}"
-  target_reached: "{{ valid_temperatures and current_temp <= target_temp }}"
-  warming_above_target: "{{ valid_temperatures and current_temp > target_temp and temp_rising }}"
+  warm_inside: "{{ valid_temperatures and current_temp > (target_temp + ((delta | float(1)) / 2)) }}"
+  warming_above_target: "{{ warm_inside and temp_rising }}"
   effective_outdoor_delta: >
     {% set base = outdoor_delta | float(1) %}
     {% if outdoor_rising %}
@@ -178,16 +197,36 @@ variables:
       {{ base }}
     {% endif %}
   outdoor_cooler: "{{ valid_temperatures and outdoor_temp <= (current_temp - (effective_outdoor_delta | float(1))) }}"
-  outdoor_too_warm: "{{ valid_temperatures and outdoor_temp >= current_temp }}"
   hot_outside_for_shading: "{{ valid_temperatures and outdoor_temp >= (target_temp + delta) }}"
-  should_ventilate: >
-    {{ not is_heating
-       and outdoor_cooler
-       and (
-         hot_inside
-         or warming_above_target
-         or (outdoor_falling and current_temp > target_temp)
-       ) }}
+  desired_window_position: >
+    {% set safe_min = safe_min_position | int(7) %}
+    {% set target = safe_min %}
+    {% if valid_temperatures and not is_heating and not is_night and outdoor_cooler %}
+      {% if current_temp >= target_temp + (2 * (delta | float(1))) %}
+        {% set target = 80 %}
+      {% elif hot_inside %}
+        {% set target = 50 %}
+      {% elif warming_above_target %}
+        {% set target = 30 %}
+      {% elif outdoor_falling and warm_inside %}
+        {% set target = 20 %}
+      {% endif %}
+    {% endif %}
+    {{ [[target, safe_min] | max, 100] | min }}
+  window_position_gap: "{{ (desired_window_position | int(0)) - (window_position | int(0)) }}"
+  next_window_position: >
+    {% set current = window_position | int(0) %}
+    {% set target = desired_window_position | int(7) %}
+    {% set step = window_step | int(10) %}
+    {% if target > current %}
+      {{ [current + step, target] | min }}
+    {% elif target < current %}
+      {{ [current - step, target] | max }}
+    {% else %}
+      {{ current }}
+    {% endif %}
+  should_adjust_window: "{{ (window_position_gap | int(0) | abs) > (window_tolerance | int(3)) }}"
+  should_ventilate: "{{ (desired_window_position | int(7)) > (safe_min_position | int(7)) }}"
 
   should_close_blind: >
     {{ valid_temperatures
@@ -208,13 +247,10 @@ variables:
        and blind_state != 'open' }}
 
   should_open_window: >
-    {{ should_ventilate and (window_position | int(0)) < 100 }}
+    {{ should_adjust_window and (window_position_gap | int(0)) > 0 }}
 
   should_close_window: >
-    {{ valid_temperatures
-       and not is_heating
-       and (target_reached or outdoor_too_warm or (outdoor_rising and not outdoor_cooler))
-       and (window_position | int(0)) > 0 }}
+    {{ should_adjust_window and (window_position_gap | int(0)) < 0 }}
 
 action:
   - choose:
@@ -223,14 +259,16 @@ action:
           - condition: template
             value_template: "{{ should_close_blind }}"
         sequence:
-          # Fermer la fenêtre si elle est ouverte
+          # Ramener la fenêtre à sa position de sécurité avant de fermer le volet.
           - if:
               - condition: template
-                value_template: "{{ window_state != 'closed' }}"
+                value_template: "{{ (window_position | int(0)) > (safe_min_position | int(7)) }}"
             then:
-              - service: cover.close_cover
+              - service: cover.set_cover_position
                 target:
                   entity_id: "{{ window }}"
+                data:
+                  position: "{{ safe_min_position }}"
               - delay:
                   seconds: "{{ action_delay }}"
           # Fermer le volet
@@ -248,7 +286,7 @@ action:
                 target:
                   entity_id: "{{ window }}"
                 data:
-                  position: "{{ next_open_position }}"
+                  position: "{{ next_window_position }}"
 
       # --- Si le volet doit être ouvert ---
       - conditions:
@@ -269,7 +307,7 @@ action:
             target:
               entity_id: "{{ window }}"
             data:
-              position: "{{ next_open_position }}"
+              position: "{{ next_window_position }}"
       - conditions:
           - condition: template
             value_template: "{{ should_close_window }}"
@@ -278,4 +316,4 @@ action:
             target:
               entity_id: "{{ window }}"
             data:
-              position: "{{ next_close_position }}"
+              position: "{{ next_window_position }}"
