@@ -3,7 +3,7 @@ blueprint:
   description: >
     Gère automatiquement l'ouverture et la fermeture d'une fenêtre de toit Velux et de son volet
     selon la température intérieure, un vrai capteur de température extérieure, la consigne de
-    thermostat, la nuit, et la tendance de température intérieure.
+    thermostat, et les tendances de température.
   domain: automation
   input:
     velux_window:
@@ -40,14 +40,6 @@ blueprint:
       selector:
         entity:
           domain: binary_sensor
-    night_start:
-      name: Heure de début de nuit
-      selector:
-        time: {}
-    night_end:
-      name: Heure de fin de nuit
-      selector:
-        time: {}
     action_delay:
       name: Délai entre deux actions (en secondes)
       default: 5
@@ -131,10 +123,6 @@ trigger:
     entity_id: !input outdoor_temp_sensor
     for:
       minutes: 5
-  - platform: time
-    at: !input night_start
-  - platform: time
-    at: !input night_end
 
 variables:
   window: !input velux_window
@@ -143,8 +131,6 @@ variables:
   temp_rising_entity: !input indoor_temp_rising
   outdoor_sensor: !input outdoor_temp_sensor
   outdoor_rising_entity: !input outdoor_temp_rising
-  night_start: !input night_start
-  night_end: !input night_end
   action_delay: !input action_delay
   delta: !input delta_temperature
   outdoor_delta: !input outdoor_cooling_delta
@@ -173,17 +159,6 @@ variables:
     {% endif %}
   safe_min_position: "{{ [min_window_position | int(7), 7] | max }}"
 
-  is_night: >
-    {% set t1 = night_start.split(':') %}
-    {% set t2 = night_end.split(':') %}
-    {% set ns = now().replace(hour=t1[0]|int, minute=t1[1]|int, second=0, microsecond=0) %}
-    {% set ne = now().replace(hour=t2[0]|int, minute=t2[1]|int, second=0, microsecond=0) %}
-    {% if ns > ne %}
-      {{ now() >= ns or now() < ne }}
-    {% else %}
-      {{ now() >= ns and now() < ne }}
-    {% endif %}
-
   hot_inside: "{{ valid_temperatures and current_temp > (target_temp + delta) }}"
   above_target: "{{ valid_temperatures and current_temp > target_temp }}"
   strong_cooling_needed: "{{ valid_temperatures and current_temp > (target_temp + ((delta | float(1)) / 2)) }}"
@@ -202,11 +177,11 @@ variables:
   desired_window_position: >
     {% set safe_min = safe_min_position | int(7) %}
     {% set target = safe_min %}
-    {% if valid_temperatures and not is_heating and not is_night and outdoor_good_for_cooling %}
+    {% if valid_temperatures and not is_heating and outdoor_good_for_cooling %}
       {% if above_target %}
         {% set target = 100 %}
       {% endif %}
-    {% elif valid_temperatures and not is_heating and not is_night and outdoor_cooler %}
+    {% elif valid_temperatures and not is_heating and outdoor_cooler %}
       {% set target = window_position | int(safe_min) %}
     {% endif %}
     {{ [[target, safe_min] | max, 100] | min }}
@@ -234,15 +209,13 @@ variables:
        and not is_heating
        and blind_state != 'closed'
        and (
-         is_night
-         or (hot_inside and temp_rising and not outdoor_cooler)
+         (hot_inside and temp_rising and not outdoor_cooler)
          or (hot_outside_for_shading and current_temp >= target_temp)
        ) }}
 
   should_open_blind: >
     {{ valid_temperatures
        and not is_heating
-       and not is_night
        and not hot_inside
        and not hot_outside_for_shading
        and blind_state != 'open' }}
