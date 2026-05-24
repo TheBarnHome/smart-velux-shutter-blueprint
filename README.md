@@ -9,7 +9,7 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 - **Fermeture automatique** du volet lorsque la pièce chauffe sans possibilité de ventilation efficace.
 - **Position cible progressive** pour éviter les cycles complet ouvert/fermé liés à l'inertie thermique.
 - **Anticipation optionnelle** de la tendance extérieure pour ouvrir plus prudemment si dehors chauffe, ou plus facilement si dehors refroidit.
-- **Ouverture minimale de sécurité** la nuit selon `sun.sun` pour éviter de descendre sous 7% et déclencher le verrouillage du Velux.
+- **Ouverture minimale de sécurité** la nuit selon `sun.sun`, tout en autorisant la fermeture complète en journée.
 - Déclenchement toutes les 10 minutes et aux changements des capteurs principaux.
 
 ## Entrées à renseigner
@@ -23,7 +23,7 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 - `delta_temperature` : marge autour de la consigne pour éviter les ouvertures/fermetures trop fréquentes.
 - `outdoor_cooling_delta` : écart minimum entre intérieur et extérieur avant d'ouvrir la fenêtre pour rafraîchir.
 - `window_position_step` : pourcentage d'ajustement progressif appliqué à la fermeture et aux petites réouvertures.
-- `min_window_position` : ouverture minimale conservée pour éviter le verrouillage, 7% par défaut.
+- `min_window_position` : ouverture minimale conservée la nuit pour éviter le verrouillage, 7% par défaut.
 - `window_position_tolerance` : écart ignoré entre la position actuelle et la position cible, 3% par défaut.
 
 ## Déclencheurs
@@ -35,12 +35,12 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 ## Logique principale
 
 1. Le blueprint calcule d'abord une position cible de fenêtre au lieu de décider simplement ouvrir ou fermer.
-2. La nuit selon `sun.sun`, en chauffage, ou quand l'extérieur est au moins aussi chaud que l'intérieur, la cible est l'ouverture minimale de sécurité, 7% par défaut.
+2. La nuit selon `sun.sun`, la cible minimale est l'ouverture de sécurité, 7% par défaut. En journée, la cible minimale est 0%, donc la fermeture complète reste possible.
 3. Si la pièce est au-dessus de la consigne et que l'extérieur est nettement plus frais, la cible passe à 100% pour rafraîchir le plus vite possible.
 4. Si l'extérieur est plus frais que l'intérieur mais pas assez pour justifier une ouverture plus grande, la fenêtre garde sa position au lieu de se refermer.
 5. En forte demande de rafraîchissement, la fenêtre va directement à la cible. Près de la consigne, elle rouvre et ferme par pas configurables, 10% par défaut.
 6. Si la tendance extérieure est renseignée, l'écart nécessaire pour ouvrir davantage augmente quand dehors chauffe et diminue quand dehors refroidit.
-7. Le volet se ferme quand la pièce chauffe sans possibilité de ventilation efficace, et se rouvre seulement si la pièce n'est plus en surchauffe et que l'extérieur n'est pas au-dessus de la zone de consigne. La nuit ne ferme plus le volet.
+7. Le volet se ferme quand la pièce chauffe sans possibilité de ventilation efficace, et se rouvre seulement si la pièce n'est plus en surchauffe et que l'extérieur n'est pas au-dessus de la zone de consigne. La nuit ne ferme plus le volet, et le jour la fenêtre peut être fermée complètement avant le volet.
 
 ---
 

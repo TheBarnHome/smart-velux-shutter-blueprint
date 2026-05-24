@@ -160,7 +160,12 @@ variables:
     {% else %}
       0
     {% endif %}
-  safe_min_position: "{{ [min_window_position | int(7), 7] | max }}"
+  safe_min_position: >
+    {% if is_night %}
+      {{ [min_window_position | int(7), 7] | max }}
+    {% else %}
+      0
+    {% endif %}
 
   hot_inside: "{{ valid_temperatures and current_temp > (target_temp + delta) }}"
   above_target: "{{ valid_temperatures and current_temp > target_temp }}"
