@@ -3,7 +3,7 @@ blueprint:
   description: >
     Gère automatiquement l'ouverture et la fermeture d'une fenêtre de toit Velux et de son volet
     selon la température intérieure, un vrai capteur de température extérieure, la consigne de
-    thermostat, et les tendances de température.
+    thermostat, et la tendance de température intérieure.
   domain: automation
   input:
     velux_window:
@@ -34,8 +34,8 @@ blueprint:
           domain: sensor
           device_class: temperature
     outdoor_temp_rising:
-      name: Température extérieure en hausse (optionnel)
-      description: Si renseigné, permet d'anticiper les hausses et baisses de température extérieure.
+      name: Température extérieure en hausse (optionnel, diagnostic)
+      description: Conservé pour observation dans les traces, mais n'influence plus les décisions.
       default: ""
       selector:
         entity:
@@ -177,15 +177,7 @@ variables:
   hot_inside: "{{ valid_temperatures and current_temp > (target_temp + delta) }}"
   above_target: "{{ valid_temperatures and current_temp > target_temp }}"
   strong_cooling_needed: "{{ valid_temperatures and current_temp > (target_temp + ((delta | float(1)) / 2)) }}"
-  effective_outdoor_delta: >
-    {% set base = outdoor_delta | float(1) %}
-    {% if outdoor_rising %}
-      {{ base + 0.5 }}
-    {% elif outdoor_falling %}
-      {{ [base - 0.5, 0] | max }}
-    {% else %}
-      {{ base }}
-    {% endif %}
+  effective_outdoor_delta: "{{ outdoor_delta | float(1) }}"
   outdoor_cooler: "{{ valid_temperatures and outdoor_temp < current_temp }}"
   outdoor_good_for_cooling: "{{ valid_temperatures and outdoor_temp <= (current_temp - (effective_outdoor_delta | float(1))) }}"
   hot_outside_for_shading: "{{ valid_temperatures and outdoor_temp >= (target_temp + delta) }}"

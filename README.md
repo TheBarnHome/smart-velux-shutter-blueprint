@@ -1,6 +1,6 @@
 # Gestion intelligente Velux et Volet
 
-Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la fermeture d'une fenêtre Velux et de son volet roulant selon la température intérieure, une vraie température extérieure mesurée, les tendances de température et la consigne du thermostat.
+Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la fermeture d'une fenêtre Velux et de son volet roulant selon la température intérieure, une vraie température extérieure mesurée, la tendance intérieure et la consigne du thermostat.
 
 ## Fonctionnalités
 
@@ -8,7 +8,6 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 - **Fermeture progressive** de la fenêtre si la pièce est assez fraîche ou si l'extérieur devient plus chaud que l'intérieur.
 - **Fermeture automatique** du volet lorsque la pièce chauffe sans possibilité de ventilation efficace.
 - **Position cible progressive** pour éviter les cycles complet ouvert/fermé liés à l'inertie thermique.
-- **Anticipation optionnelle** de la tendance extérieure pour ouvrir plus prudemment si dehors chauffe, ou plus facilement si dehors refroidit.
 - **Ouverture minimale de sécurité** la nuit selon `sun.sun`, tout en autorisant la fermeture complète en journée.
 - **Traces optionnelles** dans le Logbook pour comprendre les décisions de l'automatisation.
 - Déclenchement toutes les 10 minutes et aux changements des capteurs principaux.
@@ -17,7 +16,7 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 
 - `thermostat` : L’entité `climate` représentant le thermostat de la pièce (pour récupérer température actuelle et consigne).
 - `outdoor_temp_sensor` : l’entité `sensor` de température extérieure réelle.
-- `outdoor_temp_rising` : entité binaire optionnelle indiquant si la température extérieure monte (`on`) ou baisse (`off`).
+- `outdoor_temp_rising` : entité binaire optionnelle indiquant si la température extérieure monte (`on`) ou baisse (`off`), conservée pour diagnostic mais non utilisée dans les décisions.
 - `velux` : L’entité `cover` correspondant à la fenêtre Velux.
 - `volet` : L’entité `cover` correspondant au volet roulant.
 - `temp_rising` : Entité binaire/sensor indiquant si la température intérieure est en train de monter (`on` ou `off`).
@@ -41,8 +40,7 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 3. Si la pièce est au-dessus de la consigne et que l'extérieur est nettement plus frais, la cible passe à 100% pour rafraîchir le plus vite possible.
 4. Si l'extérieur est plus frais que l'intérieur mais pas assez pour justifier une ouverture plus grande, la fenêtre garde sa position au lieu de se refermer.
 5. En forte demande de rafraîchissement, la fenêtre va directement à la cible. Près de la consigne, elle rouvre et ferme par pas configurables, 10% par défaut.
-6. Si la tendance extérieure est renseignée, l'écart nécessaire pour ouvrir davantage augmente quand dehors chauffe et diminue quand dehors refroidit.
-7. Le volet se ferme quand la pièce chauffe sans possibilité de ventilation efficace, et se rouvre seulement si la pièce n'est plus en surchauffe et que l'extérieur n'est pas au-dessus de la zone de consigne. La nuit ne ferme plus le volet, et le jour la fenêtre peut être fermée complètement avant le volet.
+6. Le volet se ferme quand la pièce chauffe sans possibilité de ventilation efficace, et se rouvre seulement si la pièce n'est plus en surchauffe et que l'extérieur n'est pas au-dessus de la zone de consigne. La nuit ne ferme plus le volet, et le jour la fenêtre peut être fermée complètement avant le volet.
 
 ## Diagnostic
 
