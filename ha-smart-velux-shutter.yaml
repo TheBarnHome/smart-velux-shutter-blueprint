@@ -72,6 +72,17 @@ blueprint:
           step: 0.1
           unit_of_measurement: "°C"
           mode: slider
+    window_position_step:
+      name: Pas d'ajustement de la fenêtre (%)
+      description: Pour éviter les cycles complet ouvert/fermé, la fenêtre bouge de ce pourcentage à chaque correction.
+      default: 10
+      selector:
+        number:
+          min: 5
+          max: 50
+          step: 5
+          unit_of_measurement: "%"
+          mode: slider
 
 mode: single
 max_exceeded: silent
@@ -81,10 +92,16 @@ trigger:
     minutes: "/10"
   - platform: state
     entity_id: !input thermostat
+    for:
+      minutes: 5
   - platform: state
     entity_id: !input indoor_temp_rising
+    for:
+      minutes: 5
   - platform: state
     entity_id: !input outdoor_temp_sensor
+    for:
+      minutes: 5
   - platform: time
     at: !input night_start
   - platform: time
@@ -101,6 +118,7 @@ variables:
   action_delay: !input action_delay
   delta: !input delta_temperature
   outdoor_delta: !input outdoor_cooling_delta
+  window_step: !input window_position_step
   current_temp: "{{ state_attr(thermostat, 'current_temperature') | float(none) }}"
   target_temp: "{{ state_attr(thermostat, 'temperature') | float(none) }}"
   outdoor_temp: "{{ states(outdoor_sensor) | float(none) }}"
@@ -109,6 +127,21 @@ variables:
   window_state: "{{ states(window) }}"
   blind_state: "{{ states(blind) }}"
   is_heating: "{{ state_attr(thermostat, 'hvac_action') == 'heating' }}"
+  window_position: >
+    {% set position = state_attr(window, 'current_position') %}
+    {% if position is not none %}
+      {{ position | int }}
+    {% elif window_state in ['open', 'opening'] %}
+      100
+    {% else %}
+      0
+    {% endif %}
+  next_open_position: >
+    {% set next = (window_position | int(0)) + (window_step | int(10)) %}
+    {{ [next, 100] | min }}
+  next_close_position: >
+    {% set next = (window_position | int(0)) - (window_step | int(10)) %}
+    {{ [next, 0] | max }}
 
   is_night: >
     {% set t1 = night_start.split(':') %}
@@ -122,11 +155,12 @@ variables:
     {% endif %}
 
   hot_inside: "{{ valid_temperatures and current_temp > (target_temp + delta) }}"
-  cool_inside: "{{ valid_temperatures and current_temp <= (target_temp - delta) }}"
+  target_reached: "{{ valid_temperatures and current_temp <= target_temp }}"
+  warming_above_target: "{{ valid_temperatures and current_temp > target_temp and temp_rising }}"
   outdoor_cooler: "{{ valid_temperatures and outdoor_temp <= (current_temp - outdoor_delta) }}"
   outdoor_too_warm: "{{ valid_temperatures and outdoor_temp >= current_temp }}"
   hot_outside_for_shading: "{{ valid_temperatures and outdoor_temp >= (target_temp + delta) }}"
-  should_ventilate: "{{ not is_heating and hot_inside and outdoor_cooler }}"
+  should_ventilate: "{{ not is_heating and (hot_inside or warming_above_target) and outdoor_cooler }}"
 
   should_close_blind: >
     {{ valid_temperatures
@@ -147,13 +181,13 @@ variables:
        and blind_state != 'open' }}
 
   should_open_window: >
-    {{ should_ventilate and window_state != 'open' }}
+    {{ should_ventilate and (window_position | int(0)) < 100 }}
 
   should_close_window: >
     {{ valid_temperatures
        and not is_heating
-       and (cool_inside or outdoor_too_warm)
-       and window_state != 'closed' }}
+       and (target_reached or outdoor_too_warm)
+       and (window_position | int(0)) > 0 }}
 
 action:
   - choose:
@@ -183,9 +217,11 @@ action:
             then:
               - delay:
                   seconds: "{{ action_delay }}"
-              - service: cover.open_cover
+              - service: cover.set_cover_position
                 target:
                   entity_id: "{{ window }}"
+                data:
+                  position: "{{ next_open_position }}"
 
       # --- Si le volet doit être ouvert ---
       - conditions:
@@ -200,15 +236,19 @@ action:
   - choose:
       - conditions:
           - condition: template
-            value_template: "{{ should_open_window and window_state != 'open' }}"
+            value_template: "{{ should_open_window }}"
         sequence:
-          - service: cover.open_cover
+          - service: cover.set_cover_position
             target:
               entity_id: "{{ window }}"
+            data:
+              position: "{{ next_open_position }}"
       - conditions:
           - condition: template
-            value_template: "{{ should_close_window and window_state != 'closed' }}"
+            value_template: "{{ should_close_window }}"
         sequence:
-          - service: cover.close_cover
+          - service: cover.set_cover_position
             target:
               entity_id: "{{ window }}"
+            data:
+              position: "{{ next_close_position }}"
