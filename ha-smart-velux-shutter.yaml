@@ -21,6 +21,12 @@ blueprint:
       selector:
         entity:
           domain: climate
+    indoor_temp_rising:
+      name: Température intérieure en hausse
+      description: Utilisé en journée pour refermer si la pièce recommence à chauffer.
+      selector:
+        entity:
+          domain: binary_sensor
     outdoor_temp_sensor:
       name: Température extérieure réelle
       description: Capteur de température placé à l'extérieur, utilisé à la place de la météo.
@@ -110,6 +116,10 @@ trigger:
     for:
       minutes: 5
   - platform: state
+    entity_id: !input indoor_temp_rising
+    for:
+      minutes: 5
+  - platform: state
     entity_id: !input outdoor_temp_sensor
     for:
       minutes: 5
@@ -120,6 +130,7 @@ variables:
   window: !input velux_window
   blind: !input velux_blind
   thermostat: !input thermostat
+  temp_rising_entity: !input indoor_temp_rising
   outdoor_sensor: !input outdoor_temp_sensor
   action_delay: !input action_delay
   delta: !input delta_temperature
@@ -132,6 +143,7 @@ variables:
   target_temp: "{{ state_attr(thermostat, 'temperature') | float(none) }}"
   outdoor_temp: "{{ states(outdoor_sensor) | float(none) }}"
   valid_temperatures: "{{ current_temp is not none and target_temp is not none and outdoor_temp is not none }}"
+  temp_rising: "{{ is_state(temp_rising_entity, 'on') }}"
   window_state: "{{ states(window) }}"
   blind_state: "{{ states(blind) }}"
   is_heating: "{{ state_attr(thermostat, 'hvac_action') == 'heating' }}"
@@ -162,7 +174,9 @@ variables:
   desired_window_position: >
     {% set safe_min = safe_min_position | int(7) %}
     {% set target = safe_min %}
-    {% if valid_temperatures and not is_heating and outdoor_good_for_cooling %}
+    {% if valid_temperatures and not is_heating and not is_night and temp_rising %}
+      {% set target = safe_min %}
+    {% elif valid_temperatures and not is_heating and outdoor_good_for_cooling %}
       {% if above_target %}
         {% set target = 100 %}
       {% endif %}
@@ -231,6 +245,7 @@ action:
             safe_min={{ safe_min_position }}%;
             night={{ is_night }};
             heating={{ is_heating }};
+            temp_rising={{ temp_rising }};
             outdoor_cooler={{ outdoor_cooler }};
             outdoor_good_for_cooling={{ outdoor_good_for_cooling }};
             hot_inside={{ hot_inside }};

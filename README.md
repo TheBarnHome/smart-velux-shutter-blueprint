@@ -1,6 +1,6 @@
 # Gestion intelligente Velux et Volet
 
-Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la fermeture d'une fenêtre Velux et de son volet roulant selon la température intérieure, une vraie température extérieure mesurée et la consigne du thermostat.
+Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la fermeture d'une fenêtre Velux et de son volet roulant selon la température intérieure, une vraie température extérieure mesurée, la tendance intérieure et la consigne du thermostat.
 
 ## Fonctionnalités
 
@@ -18,6 +18,7 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 - `outdoor_temp_sensor` : l’entité `sensor` de température extérieure réelle.
 - `velux` : L’entité `cover` correspondant à la fenêtre Velux.
 - `volet` : L’entité `cover` correspondant au volet roulant.
+- `indoor_temp_rising` : entité binaire indiquant si la température intérieure est en hausse.
 - `delta_temperature` : marge autour de la consigne pour éviter les ouvertures/fermetures trop fréquentes.
 - `outdoor_cooling_delta` : écart minimum entre intérieur et extérieur avant d'ouvrir la fenêtre pour rafraîchir.
 - `window_position_step` : pourcentage d'ajustement progressif appliqué à la fermeture et aux petites réouvertures.
@@ -28,7 +29,7 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 ## Déclencheurs
 
 - Toutes les 10 minutes
-- À chaque changement stable pendant 5 minutes du thermostat ou du capteur extérieur
+- À chaque changement stable pendant 5 minutes du thermostat, du capteur extérieur ou de la tendance intérieure
 - Aux changements de `sun.sun` pour appliquer la position de sécurité de nuit
 
 ## Logique principale
@@ -36,13 +37,14 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 1. Le blueprint calcule d'abord une position cible de fenêtre au lieu de décider simplement ouvrir ou fermer.
 2. La nuit selon `sun.sun`, la cible minimale est l'ouverture de sécurité, 7% par défaut. En journée, la cible minimale est 0%, donc la fermeture complète reste possible. La nuit n'empêche pas le rafraîchissement si l'extérieur est plus frais.
 3. Si la pièce est au-dessus de la consigne et que l'extérieur est nettement plus frais, la cible passe à 100% pour rafraîchir le plus vite possible.
-4. Si l'extérieur est plus frais que l'intérieur mais pas assez pour justifier une ouverture plus grande, la fenêtre garde sa position au lieu de se refermer.
-5. En forte demande de rafraîchissement, la fenêtre va directement à la cible. Près de la consigne, elle rouvre et ferme par pas configurables, 10% par défaut.
-6. Le volet se ferme quand la pièce chauffe sans possibilité de ventilation efficace, et se rouvre seulement si la pièce n'est plus en surchauffe et que l'extérieur n'est pas au-dessus de la zone de consigne. La nuit ne ferme plus le volet, et le jour la fenêtre peut être fermée complètement avant le volet.
+4. En journée, si la température intérieure recommence à monter, la fenêtre se referme vers la cible minimale pour éviter de faire entrer la chaleur montante du matin.
+5. Si l'extérieur est plus frais que l'intérieur mais pas assez pour justifier une ouverture plus grande, la fenêtre garde sa position au lieu de se refermer.
+6. En forte demande de rafraîchissement, la fenêtre va directement à la cible. Près de la consigne, elle rouvre et ferme par pas configurables, 10% par défaut.
+7. Le volet se ferme quand la pièce chauffe sans possibilité de ventilation efficace, et se rouvre seulement si la pièce n'est plus en surchauffe et que l'extérieur n'est pas au-dessus de la zone de consigne. La nuit ne ferme plus le volet, et le jour la fenêtre peut être fermée complètement avant le volet.
 
 ## Diagnostic
 
-Activez `debug_logging` dans l'automatisation pour ajouter une trace à chaque exécution dans le Logbook Home Assistant. Le message indique notamment les températures, la position actuelle de la fenêtre, la position cible calculée, la prochaine position demandée et les décisions volet/fenêtre.
+Activez `debug_logging` dans l'automatisation pour ajouter une trace à chaque exécution dans le Logbook Home Assistant. Le message indique notamment les températures, la tendance intérieure, la position actuelle de la fenêtre, la position cible calculée, la prochaine position demandée et les décisions volet/fenêtre.
 
 ---
 
