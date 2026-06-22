@@ -170,11 +170,13 @@ variables:
   effective_outdoor_delta: "{{ outdoor_delta | float(1) }}"
   outdoor_cooler: "{{ valid_temperatures and outdoor_temp < current_temp }}"
   outdoor_good_for_cooling: "{{ valid_temperatures and outdoor_temp <= (current_temp - (effective_outdoor_delta | float(1))) }}"
+  useful_strong_cooling: "{{ hot_inside and outdoor_good_for_cooling }}"
+  daytime_warming_protection: "{{ valid_temperatures and not is_night and temp_rising and not useful_strong_cooling }}"
   hot_outside_for_shading: "{{ valid_temperatures and outdoor_temp >= (target_temp + delta) }}"
   desired_window_position: >
     {% set safe_min = safe_min_position | int(7) %}
     {% set target = safe_min %}
-    {% if valid_temperatures and not is_heating and not is_night and temp_rising %}
+    {% if not is_heating and daytime_warming_protection %}
       {% set target = safe_min %}
     {% elif valid_temperatures and not is_heating and outdoor_good_for_cooling %}
       {% if above_target %}
@@ -248,6 +250,8 @@ action:
             temp_rising={{ temp_rising }};
             outdoor_cooler={{ outdoor_cooler }};
             outdoor_good_for_cooling={{ outdoor_good_for_cooling }};
+            useful_strong_cooling={{ useful_strong_cooling }};
+            daytime_warming_protection={{ daytime_warming_protection }};
             hot_inside={{ hot_inside }};
             above_target={{ above_target }};
             strong_cooling_needed={{ strong_cooling_needed }};
