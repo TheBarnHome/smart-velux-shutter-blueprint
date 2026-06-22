@@ -1,6 +1,6 @@
 # Gestion intelligente Velux et Volet
 
-Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la fermeture d'une fenêtre Velux et de son volet roulant selon la température intérieure, une vraie température extérieure mesurée, la tendance intérieure et la consigne du thermostat.
+Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la fermeture d'une fenêtre Velux et de son volet roulant selon la température intérieure, une vraie température extérieure mesurée, la tendance intérieure et une consigne de température.
 
 ## Fonctionnalités
 
@@ -14,7 +14,8 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 
 ## Entrées à renseigner
 
-- `thermostat` : L’entité `climate` représentant le thermostat de la pièce (pour récupérer température actuelle et consigne).
+- `thermostat` : entité `climate` représentant le thermostat de la pièce, ou simple `sensor` de température intérieure.
+- `target_temperature` : température cible utilisée quand `thermostat` est un simple thermomètre, ou si le thermostat n'expose pas de consigne.
 - `outdoor_temp_sensor` : l’entité `sensor` de température extérieure réelle.
 - `velux` : L’entité `cover` correspondant à la fenêtre Velux.
 - `volet` : L’entité `cover` correspondant au volet roulant.
@@ -35,12 +36,13 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 ## Logique principale
 
 1. Le blueprint calcule d'abord une position cible de fenêtre au lieu de décider simplement ouvrir ou fermer.
-2. La nuit selon `sun.sun`, la cible minimale est l'ouverture de sécurité, 7% par défaut. En journée, la cible minimale est 0%, donc la fermeture complète reste possible. La nuit n'empêche pas le rafraîchissement si l'extérieur est plus frais.
-3. Si la pièce est au-dessus de la consigne et que l'extérieur est nettement plus frais, la cible passe à 100% pour rafraîchir le plus vite possible.
-4. En journée, si la température intérieure recommence à monter, la fenêtre se referme vers la cible minimale sauf si l'extérieur reste nettement plus frais et que la pièce est encore franchement au-dessus de la consigne.
-5. Si l'extérieur est plus frais que l'intérieur mais pas assez pour justifier une ouverture plus grande, la fenêtre garde sa position au lieu de se refermer.
-6. En forte demande de rafraîchissement, la fenêtre va directement à la cible. Près de la consigne, elle rouvre et ferme par pas configurables, 10% par défaut.
-7. Le volet se ferme quand la pièce chauffe sans possibilité de ventilation efficace, et se rouvre seulement si la pièce n'est plus en surchauffe et que l'extérieur n'est pas au-dessus de la zone de consigne. La nuit ne ferme plus le volet, et le jour la fenêtre peut être fermée complètement avant le volet.
+2. Si l'entité intérieure est un thermostat, la consigne vient du thermostat. Si c'est un simple thermomètre, la consigne vient du slider `target_temperature`.
+3. La nuit selon `sun.sun`, la cible minimale est l'ouverture de sécurité, 7% par défaut. En journée, la cible minimale est 0%, donc la fermeture complète reste possible. La nuit n'empêche pas le rafraîchissement si l'extérieur est plus frais.
+4. Si la pièce est au-dessus de la consigne et que l'extérieur est nettement plus frais, la cible passe à 100% pour rafraîchir le plus vite possible.
+5. En journée, si la température intérieure recommence à monter, la fenêtre se referme vers la cible minimale sauf si l'extérieur reste nettement plus frais et que la pièce est encore franchement au-dessus de la consigne.
+6. Si l'extérieur est plus frais que l'intérieur mais pas assez pour justifier une ouverture plus grande, la fenêtre garde sa position au lieu de se refermer.
+7. En forte demande de rafraîchissement, la fenêtre va directement à la cible. Près de la consigne, elle rouvre et ferme par pas configurables, 10% par défaut.
+8. Le volet se ferme quand la pièce chauffe sans possibilité de ventilation efficace, et se rouvre seulement si la pièce n'est plus en surchauffe et que l'extérieur n'est pas au-dessus de la zone de consigne. La nuit ne ferme plus le volet, et le jour la fenêtre peut être fermée complètement avant le volet.
 
 ## Diagnostic
 

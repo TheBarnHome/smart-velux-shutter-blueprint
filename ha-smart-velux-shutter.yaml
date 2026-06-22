@@ -2,8 +2,8 @@ blueprint:
   name: Gestion Velux et Volet Automatique
   description: >
     Gère automatiquement l'ouverture et la fermeture d'une fenêtre de toit Velux et de son volet
-    selon la température intérieure, un vrai capteur de température extérieure, et la consigne de
-    thermostat.
+    selon la température intérieure, un vrai capteur de température extérieure, et une consigne
+    issue d'un thermostat ou d'un réglage manuel.
   domain: automation
   input:
     velux_window:
@@ -17,10 +17,14 @@ blueprint:
         entity:
           domain: cover
     thermostat:
-      name: Thermostat de la pièce
+      name: Thermostat ou thermomètre intérieur
+      description: Entité climate avec température/consigne, ou simple sensor de température.
       selector:
         entity:
-          domain: climate
+          filter:
+            - domain: climate
+            - domain: sensor
+              device_class: temperature
     indoor_temp_rising:
       name: Température intérieure en hausse
       description: Utilisé en journée pour refermer si la pièce recommence à chauffer.
@@ -52,6 +56,17 @@ blueprint:
           min: 0
           max: 5
           step: 0.1
+          unit_of_measurement: "°C"
+          mode: slider
+    target_temperature:
+      name: Température cible si thermomètre simple (°C)
+      description: Utilisée quand l'entité intérieure est un sensor, ou si le thermostat n'expose pas de consigne.
+      default: 20
+      selector:
+        number:
+          min: 10
+          max: 30
+          step: 0.5
           unit_of_measurement: "°C"
           mode: slider
     outdoor_cooling_delta:
@@ -134,19 +149,31 @@ variables:
   outdoor_sensor: !input outdoor_temp_sensor
   action_delay: !input action_delay
   delta: !input delta_temperature
+  target_temperature_fallback: !input target_temperature
   outdoor_delta: !input outdoor_cooling_delta
   window_step: !input window_position_step
   min_window_position: !input min_window_position
   window_tolerance: !input window_position_tolerance
   debug_logging: !input debug_logging
-  current_temp: "{{ state_attr(thermostat, 'current_temperature') | float(none) }}"
-  target_temp: "{{ state_attr(thermostat, 'temperature') | float(none) }}"
+  thermostat_domain: "{{ thermostat.split('.')[0] }}"
+  current_temp: >
+    {% if thermostat_domain == 'climate' %}
+      {{ state_attr(thermostat, 'current_temperature') | float(none) }}
+    {% else %}
+      {{ states(thermostat) | float(none) }}
+    {% endif %}
+  target_temp: >
+    {% if thermostat_domain == 'climate' and state_attr(thermostat, 'temperature') is not none %}
+      {{ state_attr(thermostat, 'temperature') | float(none) }}
+    {% else %}
+      {{ target_temperature_fallback | float(none) }}
+    {% endif %}
   outdoor_temp: "{{ states(outdoor_sensor) | float(none) }}"
   valid_temperatures: "{{ current_temp is not none and target_temp is not none and outdoor_temp is not none }}"
   temp_rising: "{{ is_state(temp_rising_entity, 'on') }}"
   window_state: "{{ states(window) }}"
   blind_state: "{{ states(blind) }}"
-  is_heating: "{{ state_attr(thermostat, 'hvac_action') == 'heating' }}"
+  is_heating: "{{ thermostat_domain == 'climate' and state_attr(thermostat, 'hvac_action') == 'heating' }}"
   is_night: "{{ is_state('sun.sun', 'below_horizon') }}"
   window_position: >
     {% set position = state_attr(window, 'current_position') %}
