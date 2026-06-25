@@ -1,12 +1,11 @@
-# Gestion intelligente Velux et Volet
+# Gestion intelligente Velux
 
-Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la fermeture d'une fenêtre Velux et de son volet roulant selon la température intérieure, une vraie température extérieure mesurée, la tendance intérieure et une consigne de température.
+Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la fermeture d'une fenêtre Velux selon la température intérieure, une vraie température extérieure mesurée, la tendance intérieure et une consigne de température.
 
 ## Fonctionnalités
 
 - **Ouverture progressive** de la fenêtre Velux si la pièce est trop chaude et que l'extérieur est réellement plus frais.
 - **Fermeture progressive** de la fenêtre si la pièce est assez fraîche ou si l'extérieur devient plus chaud que l'intérieur.
-- **Fermeture automatique** du volet lorsque la pièce chauffe sans possibilité de ventilation efficace.
 - **Position cible progressive** pour éviter les cycles complet ouvert/fermé liés à l'inertie thermique.
 - **Ouverture minimale de sécurité** la nuit selon `sun.sun`, tout en autorisant la fermeture complète en journée.
 - **Traces optionnelles** dans le Logbook pour comprendre les décisions de l'automatisation.
@@ -18,7 +17,6 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 - `target_temperature` : température cible utilisée quand `thermostat` est un simple thermomètre, ou si le thermostat n'expose pas de consigne.
 - `outdoor_temp_sensor` : l’entité `sensor` de température extérieure réelle.
 - `velux` : L’entité `cover` correspondant à la fenêtre Velux.
-- `volet` : L’entité `cover` correspondant au volet roulant.
 - `indoor_temp_rising` : entité binaire indiquant si la température intérieure est en hausse.
 - `delta_temperature` : marge autour de la consigne pour éviter les ouvertures/fermetures trop fréquentes.
 - `outdoor_cooling_delta` : écart minimum entre intérieur et extérieur avant d'ouvrir la fenêtre pour rafraîchir.
@@ -42,11 +40,10 @@ Ce blueprint Home Assistant permet de gérer automatiquement l'ouverture et la f
 5. En journée, si la température intérieure recommence à monter, la fenêtre se referme vers la cible minimale sauf si l'extérieur reste nettement plus frais et que la pièce est encore franchement au-dessus de la consigne.
 6. Si l'extérieur est plus frais que l'intérieur mais pas assez pour justifier une ouverture plus grande, la fenêtre garde sa position au lieu de se refermer.
 7. En forte demande de rafraîchissement, la fenêtre va directement à la cible. Près de la consigne, elle rouvre et ferme par pas configurables, 10% par défaut.
-8. Le volet se ferme quand la pièce chauffe sans possibilité de ventilation efficace, et se rouvre seulement si la pièce n'est plus en surchauffe et que l'extérieur n'est pas au-dessus de la zone de consigne. La nuit ne ferme plus le volet, et le jour la fenêtre peut être fermée complètement avant le volet.
 
 ## Diagnostic
 
-Activez `debug_logging` dans l'automatisation pour ajouter une trace à chaque exécution dans le Logbook Home Assistant. Le message indique notamment les températures, la tendance intérieure, la position actuelle de la fenêtre, la position cible calculée, la prochaine position demandée et les décisions volet/fenêtre.
+Activez `debug_logging` dans l'automatisation pour ajouter une trace à chaque exécution dans le Logbook Home Assistant. Le message indique notamment les températures, la tendance intérieure, la position actuelle de la fenêtre, la position cible calculée, la prochaine position demandée et les décisions d'ouverture/fermeture.
 
 ---
 

@@ -1,18 +1,13 @@
 blueprint:
-  name: Gestion Velux et Volet Automatique
+  name: Gestion Velux Automatique
   description: >
-    Gère automatiquement l'ouverture et la fermeture d'une fenêtre de toit Velux et de son volet
-    selon la température intérieure, un vrai capteur de température extérieure, et une consigne
+    Gère automatiquement l'ouverture et la fermeture d'une fenêtre de toit Velux selon la
+    température intérieure, un vrai capteur de température extérieure, et une consigne
     issue d'un thermostat ou d'un réglage manuel.
   domain: automation
   input:
     velux_window:
       name: Fenêtre Velux
-      selector:
-        entity:
-          domain: cover
-    velux_blind:
-      name: Volet Velux
       selector:
         entity:
           domain: cover
@@ -38,15 +33,6 @@ blueprint:
         entity:
           domain: sensor
           device_class: temperature
-    action_delay:
-      name: Délai entre deux actions (en secondes)
-      default: 5
-      selector:
-        number:
-          min: 0
-          max: 30
-          unit_of_measurement: s
-          mode: slider
     delta_temperature:
       name: Delta de température pour action (°C)
       description: Ecart entre la température actuelle et la consigne pour déclencher une action
@@ -143,11 +129,9 @@ trigger:
 
 variables:
   window: !input velux_window
-  blind: !input velux_blind
   thermostat: !input thermostat
   temp_rising_entity: !input indoor_temp_rising
   outdoor_sensor: !input outdoor_temp_sensor
-  action_delay: !input action_delay
   delta: !input delta_temperature
   target_temperature_fallback: !input target_temperature
   outdoor_delta: !input outdoor_cooling_delta
@@ -172,7 +156,6 @@ variables:
   valid_temperatures: "{{ current_temp is not none and target_temp is not none and outdoor_temp is not none }}"
   temp_rising: "{{ is_state(temp_rising_entity, 'on') }}"
   window_state: "{{ states(window) }}"
-  blind_state: "{{ states(blind) }}"
   is_heating: "{{ thermostat_domain == 'climate' and state_attr(thermostat, 'hvac_action') == 'heating' }}"
   is_night: "{{ is_state('sun.sun', 'below_horizon') }}"
   window_position: >
@@ -199,7 +182,6 @@ variables:
   outdoor_good_for_cooling: "{{ valid_temperatures and outdoor_temp <= (current_temp - (effective_outdoor_delta | float(1))) }}"
   useful_strong_cooling: "{{ hot_inside and outdoor_good_for_cooling }}"
   daytime_warming_protection: "{{ valid_temperatures and not is_night and temp_rising and not useful_strong_cooling }}"
-  hot_outside_for_shading: "{{ valid_temperatures and outdoor_temp >= (target_temp + delta) }}"
   desired_window_position: >
     {% set safe_min = safe_min_position | int(7) %}
     {% set target = safe_min %}
@@ -231,22 +213,6 @@ variables:
     {% endif %}
   should_adjust_window: "{{ (window_position_gap | int(0) | abs) > (window_tolerance | int(3)) }}"
   should_ventilate: "{{ (desired_window_position | int(7)) > (safe_min_position | int(7)) }}"
-
-  should_close_blind: >
-    {{ valid_temperatures
-       and not is_heating
-       and blind_state != 'closed'
-       and (
-         (hot_inside and not outdoor_cooler)
-         or (hot_outside_for_shading and current_temp >= target_temp)
-       ) }}
-
-  should_open_blind: >
-    {{ valid_temperatures
-       and not is_heating
-       and not hot_inside
-       and not hot_outside_for_shading
-       and blind_state != 'open' }}
 
   should_open_window: >
     {{ should_adjust_window and (window_position_gap | int(0)) > 0 }}
@@ -282,56 +248,9 @@ action:
             hot_inside={{ hot_inside }};
             above_target={{ above_target }};
             strong_cooling_needed={{ strong_cooling_needed }};
-            close_blind={{ should_close_blind }};
-            open_blind={{ should_open_blind }};
             open_window={{ should_open_window }};
             close_window={{ should_close_window }}.
 
-  - choose:
-      # --- Si le volet doit être fermé ---
-      - conditions:
-          - condition: template
-            value_template: "{{ should_close_blind }}"
-        sequence:
-          # Ramener la fenêtre à sa position de sécurité avant de fermer le volet.
-          - if:
-              - condition: template
-                value_template: "{{ (window_position | int(0)) > (safe_min_position | int(7)) }}"
-            then:
-              - service: cover.set_cover_position
-                target:
-                  entity_id: "{{ window }}"
-                data:
-                  position: "{{ safe_min_position }}"
-              - delay:
-                  seconds: "{{ action_delay }}"
-          # Fermer le volet
-          - service: cover.close_cover
-            target:
-              entity_id: "{{ blind }}"
-          # Rouvrir la fenêtre si elle devait rester ouverte
-          - if:
-              - condition: template
-                value_template: "{{ should_ventilate }}"
-            then:
-              - delay:
-                  seconds: "{{ action_delay }}"
-              - service: cover.set_cover_position
-                target:
-                  entity_id: "{{ window }}"
-                data:
-                  position: "{{ next_window_position }}"
-
-      # --- Si le volet doit être ouvert ---
-      - conditions:
-          - condition: template
-            value_template: "{{ should_open_blind }}"
-        sequence:
-          - service: cover.open_cover
-            target:
-              entity_id: "{{ blind }}"
-
-  # --- Gérer indépendamment la fenêtre ---
   - choose:
       - conditions:
           - condition: template
