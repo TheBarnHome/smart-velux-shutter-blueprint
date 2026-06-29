@@ -66,9 +66,20 @@ blueprint:
           step: 0.1
           unit_of_measurement: "°C"
           mode: slider
+    proportional_band:
+      name: Bande proportionnelle de régulation (°C)
+      description: Ecart à la consigne qui correspond à 100% d'ouverture. Entre 0 et cet écart, l'ouverture cible est proportionnelle.
+      default: 3
+      selector:
+        number:
+          min: 0.5
+          max: 10
+          step: 0.5
+          unit_of_measurement: "°C"
+          mode: slider
     window_position_step:
       name: Pas d'ajustement progressif de la fenêtre (%)
-      description: Fermeture progressive et petite réouverture près de la consigne. L'ouverture forte va directement à la cible.
+      description: Mouvement maximum de la fenêtre à chaque correction, en ouverture comme en fermeture.
       default: 10
       selector:
         number:
@@ -135,6 +146,7 @@ variables:
   delta: !input delta_temperature
   target_temperature_fallback: !input target_temperature
   outdoor_delta: !input outdoor_cooling_delta
+  proportional_band: !input proportional_band
   window_step: !input window_position_step
   min_window_position: !input min_window_position
   window_tolerance: !input window_position_tolerance
@@ -176,20 +188,29 @@ variables:
 
   hot_inside: "{{ valid_temperatures and current_temp > (target_temp + delta) }}"
   above_target: "{{ valid_temperatures and current_temp > target_temp }}"
-  strong_cooling_needed: "{{ valid_temperatures and current_temp > (target_temp + ((delta | float(1)) / 2)) }}"
+  temperature_error: "{{ (current_temp - target_temp) if valid_temperatures else none }}"
+  proportional_ratio: >
+    {% if valid_temperatures %}
+      {% set ratio = (temperature_error | float(0)) / (proportional_band | float(3)) %}
+      {{ [[ratio, 0] | max, 1] | min }}
+    {% else %}
+      0
+    {% endif %}
   effective_outdoor_delta: "{{ outdoor_delta | float(1) }}"
+  cooling_margin: "{{ (current_temp - outdoor_temp) if valid_temperatures else none }}"
   outdoor_cooler: "{{ valid_temperatures and outdoor_temp < current_temp }}"
   outdoor_good_for_cooling: "{{ valid_temperatures and outdoor_temp <= (current_temp - (effective_outdoor_delta | float(1))) }}"
+  cooling_available: "{{ valid_temperatures and not is_heating and outdoor_good_for_cooling }}"
   useful_strong_cooling: "{{ hot_inside and outdoor_good_for_cooling }}"
-  daytime_warming_protection: "{{ valid_temperatures and not is_night and temp_rising and not useful_strong_cooling }}"
+  daytime_warming_protection: "{{ valid_temperatures and not is_night and temp_rising and not cooling_available }}"
   desired_window_position: >
     {% set safe_min = safe_min_position | int(7) %}
     {% set target = safe_min %}
     {% if not is_heating and daytime_warming_protection %}
       {% set target = safe_min %}
-    {% elif valid_temperatures and not is_heating and outdoor_good_for_cooling %}
+    {% elif cooling_available %}
       {% if above_target %}
-        {% set target = 100 %}
+        {% set target = safe_min + ((100 - safe_min) * (proportional_ratio | float(0))) %}
       {% endif %}
     {% elif valid_temperatures and not is_heating and outdoor_cooler %}
       {% set target = window_position | int(safe_min) %}
@@ -201,11 +222,7 @@ variables:
     {% set target = desired_window_position | int(7) %}
     {% set step = window_step | int(10) %}
     {% if target > current %}
-      {% if strong_cooling_needed %}
-        {{ target }}
-      {% else %}
-        {{ [current + step, target] | min }}
-      {% endif %}
+      {{ [current + step, target] | min }}
     {% elif target < current %}
       {{ [current - step, target] | max }}
     {% else %}
@@ -241,13 +258,17 @@ action:
             night={{ is_night }};
             heating={{ is_heating }};
             temp_rising={{ temp_rising }};
+            temperature_error={{ temperature_error }}°C;
+            proportional_band={{ proportional_band }}°C;
+            proportional_ratio={{ proportional_ratio }};
+            cooling_margin={{ cooling_margin }}°C;
+            cooling_available={{ cooling_available }};
             outdoor_cooler={{ outdoor_cooler }};
             outdoor_good_for_cooling={{ outdoor_good_for_cooling }};
             useful_strong_cooling={{ useful_strong_cooling }};
             daytime_warming_protection={{ daytime_warming_protection }};
             hot_inside={{ hot_inside }};
             above_target={{ above_target }};
-            strong_cooling_needed={{ strong_cooling_needed }};
             open_window={{ should_open_window }};
             close_window={{ should_close_window }}.
 
